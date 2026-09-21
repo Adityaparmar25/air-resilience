@@ -1,0 +1,41 @@
+{
+  "_metadata": {
+    "data_source": "fixture",
+    "fixture_name": "duplicate_rows",
+    "is_synthetic": true,
+    "description": "Time series containing duplicated timestamp transmissions for deduplication testing"
+  },
+  "station_id": "DL001",
+  "records": [
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-18 10:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 65.0
+    },
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-18 10:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 65.5
+    },
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-18 11:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 70.0
+    }
+  ]
+}

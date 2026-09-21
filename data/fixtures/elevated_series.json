@@ -1,0 +1,86 @@
+{
+  "_metadata": {
+    "data_source": "fixture",
+    "fixture_name": "elevated_series",
+    "is_synthetic": true,
+    "description": "Elevated PM2.5 readings demonstrating persistent accumulation above normal range"
+  },
+  "station_id": "DL001",
+  "records": [
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-16 00:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 142.0,
+      "PM10 (ug/m3)": 260.0,
+      "NO2 (ug/m3)": 65.0,
+      "SO2 (ug/m3)": 18.0,
+      "CO (mg/m3)": 2.2,
+      "Ozone (ug/m3)": 15.0
+    },
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-16 01:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 155.0,
+      "PM10 (ug/m3)": 278.0,
+      "NO2 (ug/m3)": 70.0,
+      "SO2 (ug/m3)": 19.5,
+      "CO (mg/m3)": 2.5,
+      "Ozone (ug/m3)": 14.0
+    },
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-16 02:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 172.5,
+      "PM10 (ug/m3)": 295.0,
+      "NO2 (ug/m3)": 75.0,
+      "SO2 (ug/m3)": 21.0,
+      "CO (mg/m3)": 2.8,
+      "Ozone (ug/m3)": 12.0
+    },
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-16 03:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 188.0,
+      "PM10 (ug/m3)": 315.0,
+      "NO2 (ug/m3)": 80.0,
+      "SO2 (ug/m3)": 22.0,
+      "CO (mg/m3)": 3.0,
+      "Ozone (ug/m3)": 11.0
+    },
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-16 04:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 210.0,
+      "PM10 (ug/m3)": 340.0,
+      "NO2 (ug/m3)": 88.0,
+      "SO2 (ug/m3)": 24.5,
+      "CO (mg/m3)": 3.4,
+      "Ozone (ug/m3)": 10.0
+    }
+  ]
+}

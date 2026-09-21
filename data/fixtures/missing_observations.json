@@ -1,0 +1,61 @@
+{
+  "_metadata": {
+    "data_source": "fixture",
+    "fixture_name": "missing_observations",
+    "is_synthetic": true,
+    "description": "Time series containing a 4-hour telemetry dropout gap between 02:00 and 07:00"
+  },
+  "station_id": "DL001",
+  "records": [
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-17 00:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 52.0
+    },
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-17 01:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 49.0
+    },
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-17 02:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 47.0
+    },
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-17 07:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 68.0
+    },
+    {
+      "StationId": "DL001",
+      "StationName": "Anand Vihar, Delhi",
+      "Date": "2026-01-17 08:00:00",
+      "Latitude": 28.6508,
+      "Longitude": 77.3152,
+      "City": "Delhi",
+      "State": "Delhi",
+      "PM2.5 (ug/m3)": 74.0
+    }
+  ]
+}
