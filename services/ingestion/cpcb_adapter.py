@@ -228,6 +228,44 @@ class CPCBAdapter:
 
         return records
 
+    def fetch_station_observations(
+        self,
+        station_id: str,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        fixture_path: Optional[str] = None,
+    ) -> List[MonitoringObservation]:
+        """Fetch and normalize station observations from fixture or source."""
+        if not fixture_path:
+            fixtures_dir = Path(__file__).resolve().parent.parent.parent / "data" / "fixtures"
+            fixture_candidates = [
+                fixtures_dir / f"{station_id.lower()}_series.json",
+                fixtures_dir / "normal_series.json",
+                fixtures_dir / "forecast_input.json",
+            ]
+            for candidate in fixture_candidates:
+                if candidate.exists():
+                    fixture_path = str(candidate)
+                    break
+
+        if not fixture_path:
+            return []
+
+        raw_records = self.fetch(source_path=fixture_path, station_id=station_id)
+        if not raw_records:
+            # Fall back to all records in the fixture if station filter returned none
+            raw_records = self.fetch(source_path=fixture_path)
+
+        observations: List[MonitoringObservation] = []
+        for raw in raw_records:
+            try:
+                obs, _ = self.normalize(raw, is_fixture=True)
+                observations.append(obs)
+            except Exception:
+                continue
+
+        return observations
+
     @staticmethod
     def _extract_first_match(record: Dict[str, Any], candidates: List[str]) -> Any:
         """Return the value of the first key from candidates found in record."""

@@ -16,5 +16,6 @@ node_modules/
 apps/web/node_modules/
 apps/web/.next/
 
-# Runtime data uploads
+# Runtime data uploads and operational store
 data/uploads/
+data/operational/

@@ -1,0 +1,34 @@
+[
+  {
+    "latitude": 28.6475,
+    "longitude": 77.3180,
+    "acquisition_time": "2026-01-15T10:45:00Z",
+    "confidence": 88,
+    "frp": 24.6,
+    "satellite": "VIIRS-SNPP",
+    "claim_statement": "nearby fire/thermal anomaly detected",
+    "source_metadata": {
+      "data_source": "fixture",
+      "instrument": "VIIRS",
+      "provider": "NASA FIRMS",
+      "is_synthetic": true,
+      "notice": "Thermal anomaly detected; does not confirm specific ground combustion etiology"
+    }
+  },
+  {
+    "latitude": 28.3530,
+    "longitude": 76.9450,
+    "acquisition_time": "2026-01-15T10:40:00Z",
+    "confidence": 72,
+    "frp": 15.2,
+    "satellite": "MODIS-Aqua",
+    "claim_statement": "nearby fire/thermal anomaly detected",
+    "source_metadata": {
+      "data_source": "fixture",
+      "instrument": "MODIS",
+      "provider": "NASA FIRMS",
+      "is_synthetic": true,
+      "notice": "Thermal anomaly detected; does not confirm specific ground combustion etiology"
+    }
+  }
+]

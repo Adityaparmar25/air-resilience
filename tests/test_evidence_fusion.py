@@ -9,6 +9,7 @@ from schemas.citizen_image_analysis import (
 )
 from schemas.event import EventSeverity, EventStatus, EvidenceSignal
 from services.fusion.engine import EvidenceFusionEngine
+from services.ingestion.imd_adapter import IMDAdapter
 
 
 def test_evidence_fusion_weighted_score():
@@ -137,7 +138,9 @@ def test_false_positive_determination():
 
 def test_create_event_generates_explanation():
     """Event creation must generate structured explanation text."""
-    engine = EvidenceFusionEngine()
+    engine = EvidenceFusionEngine(
+        weather_adapter=IMDAdapter(simulate_timeout=True)
+    )
     now = datetime.now(timezone.utc)
 
     analysis = CitizenImageAnalysis(

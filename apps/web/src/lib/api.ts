@@ -1,4 +1,4 @@
-import { CitizenReport, PollutionEvent } from "../types/api";
+import { AuditRecord, CitizenReport, Incident, IncidentNote, PollutionEvent } from "../types/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -7,7 +7,7 @@ export async function checkApiHealth(): Promise<{ status: string; timestamp: str
     const res = await fetch(`${API_BASE}/api/v1/health`, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
-  } catch (err) {
+  } catch {
     return { status: "unreachable", timestamp: new Date().toISOString() };
   }
 }
@@ -103,5 +103,197 @@ export async function fetchEventById(eventId: string): Promise<PollutionEvent> {
     throw new Error(`Failed to fetch event ${eventId}: HTTP ${res.status}`);
   }
 
+  return await res.json();
+}
+
+// =============================================================================
+// AUTHORITY INCIDENT APIS (PHASE 3C)
+// =============================================================================
+
+export async function createIncident(payload: {
+  event_id: string;
+  priority?: string;
+  actor?: string;
+  initial_notes?: string;
+}): Promise<Incident> {
+  const res = await fetch(`${API_BASE}/api/v1/incidents`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_id: payload.event_id,
+      priority: payload.priority || null,
+      actor: payload.actor || "authority_dispatcher",
+      initial_notes: payload.initial_notes || null,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Create incident failed: ${err}`);
+  }
+  return await res.json();
+}
+
+export async function fetchIncidents(status?: string, priority?: string): Promise<Incident[]> {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (priority) params.set("priority", priority);
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_BASE}/api/v1/incidents${query}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch incidents: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchIncidentById(incidentId: string): Promise<Incident> {
+  const res = await fetch(`${API_BASE}/api/v1/incidents/${encodeURIComponent(incidentId)}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch incident ${incidentId}: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function assignIncident(
+  incidentId: string,
+  payload: {
+    assigned_to: string;
+    assigned_team?: string;
+    actor?: string;
+    notes?: string;
+  }
+): Promise<Incident> {
+  const res = await fetch(`${API_BASE}/api/v1/incidents/${encodeURIComponent(incidentId)}/assign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      assigned_to: payload.assigned_to,
+      assigned_team: payload.assigned_team || "Delhi Enforcement Squad",
+      actor: payload.actor || "dispatcher_1",
+      notes: payload.notes || null,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Assign failed: ${err}`);
+  }
+  return await res.json();
+}
+
+export async function acknowledgeIncident(
+  incidentId: string,
+  payload: { actor: string; notes?: string }
+): Promise<Incident> {
+  const res = await fetch(`${API_BASE}/api/v1/incidents/${encodeURIComponent(incidentId)}/acknowledge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      actor: payload.actor,
+      notes: payload.notes || null,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Acknowledge failed: ${err}`);
+  }
+  return await res.json();
+}
+
+export async function investigateIncident(
+  incidentId: string,
+  payload: { actor: string; notes?: string }
+): Promise<Incident> {
+  const res = await fetch(`${API_BASE}/api/v1/incidents/${encodeURIComponent(incidentId)}/investigate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      actor: payload.actor,
+      notes: payload.notes || null,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Investigate transition failed: ${err}`);
+  }
+  return await res.json();
+}
+
+export async function resolveIncident(
+  incidentId: string,
+  payload: { actor: string; resolution_summary: string; notes?: string }
+): Promise<Incident> {
+  const res = await fetch(`${API_BASE}/api/v1/incidents/${encodeURIComponent(incidentId)}/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      actor: payload.actor,
+      resolution_summary: payload.resolution_summary,
+      notes: payload.notes || null,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Resolve failed: ${err}`);
+  }
+  return await res.json();
+}
+
+export async function dismissIncident(
+  incidentId: string,
+  payload: { actor: string; dismissal_reason: string; notes?: string }
+): Promise<Incident> {
+  const res = await fetch(`${API_BASE}/api/v1/incidents/${encodeURIComponent(incidentId)}/dismiss`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      actor: payload.actor,
+      dismissal_reason: payload.dismissal_reason,
+      notes: payload.notes || null,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Dismiss failed: ${err}`);
+  }
+  return await res.json();
+}
+
+export async function addIncidentNote(
+  incidentId: string,
+  payload: { actor: string; content: string }
+): Promise<IncidentNote> {
+  const res = await fetch(`${API_BASE}/api/v1/incidents/${encodeURIComponent(incidentId)}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Add note failed: ${err}`);
+  }
+  return await res.json();
+}
+
+export async function fetchIncidentAudit(incidentId: string): Promise<AuditRecord[]> {
+  const res = await fetch(`${API_BASE}/api/v1/incidents/${encodeURIComponent(incidentId)}/audit`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch audit records: HTTP ${res.status}`);
+  }
   return await res.json();
 }

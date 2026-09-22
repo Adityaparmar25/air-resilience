@@ -1,0 +1,53 @@
+[
+  {
+    "station_name": "Safdarjung / Anand Vihar Station",
+    "lat": 28.6469,
+    "lon": 77.3160,
+    "timestamp": "2026-01-15T11:00:00Z",
+    "temperature": 18.5,
+    "humidity": 72.0,
+    "wind_speed": 1.8,
+    "wind_direction": 290.0,
+    "rainfall": 0.0,
+    "source_metadata": {
+      "data_source": "fixture",
+      "provider": "India Meteorological Department (IMD)",
+      "is_synthetic": true,
+      "calibration_status": "calibrated_offline_replay"
+    }
+  },
+  {
+    "station_name": "Noida Sector 62 Observatory",
+    "lat": 28.6258,
+    "lon": 77.3648,
+    "timestamp": "2026-01-15T11:00:00Z",
+    "temperature": 19.1,
+    "humidity": 68.0,
+    "wind_speed": 2.2,
+    "wind_direction": 305.0,
+    "rainfall": 0.0,
+    "source_metadata": {
+      "data_source": "fixture",
+      "provider": "India Meteorological Department (IMD)",
+      "is_synthetic": true,
+      "calibration_status": "calibrated_offline_replay"
+    }
+  },
+  {
+    "station_name": "Manesar IMD AWS",
+    "lat": 28.3515,
+    "lon": 76.9428,
+    "timestamp": "2026-01-15T11:00:00Z",
+    "temperature": 20.3,
+    "humidity": 64.0,
+    "wind_speed": 3.1,
+    "wind_direction": 280.0,
+    "rainfall": 0.0,
+    "source_metadata": {
+      "data_source": "fixture",
+      "provider": "India Meteorological Department (IMD)",
+      "is_synthetic": true,
+      "calibration_status": "calibrated_offline_replay"
+    }
+  }
+]

@@ -1,0 +1,34 @@
+[
+  {
+    "lat": 28.6469,
+    "lon": 77.3160,
+    "timestamp": "2026-01-15T08:30:00Z",
+    "no2_tropospheric_column": 142.5,
+    "aerosol_index": 1.85,
+    "spatial_coverage_km": 7.0,
+    "source_metadata": {
+      "data_source": "fixture",
+      "mission": "Sentinel-5P TROPOMI",
+      "provider": "Copernicus / Google Earth Engine",
+      "signal_types": ["tropospheric_NO2_column_number_density", "absorbing_aerosol_index"],
+      "is_synthetic": true,
+      "disclaimer": "Atmospheric column density; not direct ground-level PM2.5 measurement"
+    }
+  },
+  {
+    "lat": 28.6258,
+    "lon": 77.3648,
+    "timestamp": "2026-01-15T08:30:00Z",
+    "no2_tropospheric_column": 118.0,
+    "aerosol_index": 1.60,
+    "spatial_coverage_km": 7.0,
+    "source_metadata": {
+      "data_source": "fixture",
+      "mission": "Sentinel-5P TROPOMI",
+      "provider": "Copernicus / Google Earth Engine",
+      "signal_types": ["tropospheric_NO2_column_number_density", "absorbing_aerosol_index"],
+      "is_synthetic": true,
+      "disclaimer": "Atmospheric column density; not direct ground-level PM2.5 measurement"
+    }
+  }
+]

@@ -15,8 +15,21 @@ from schemas.api import (
     StationSeriesResponse,
 )
 from schemas.canonical import MonitoringObservation
-from schemas.citizen_image_analysis import CitizenImageAnalysis
-from schemas.event import EventStatus, PollutionEvent
+from schemas.event import EventStatus, EvidenceStatus, OperationalStatus, PollutionEvent
+from schemas.incident import (
+    AcknowledgeIncidentRequest,
+    AddNoteRequest,
+    AssignIncidentRequest,
+    AuditRecord,
+    CreateIncidentRequest,
+    DismissIncidentRequest,
+    Incident,
+    IncidentNote,
+    IncidentPriority,
+    IncidentStatus,
+    InvestigateIncidentRequest,
+    ResolveIncidentRequest,
+)
 from schemas.report import CitizenReport, ReportResponse, ReportSubmissionRequest
 from services.ai.gemini_service import GeminiVisionAnalyzer
 from services.anomaly.detector import (
@@ -552,3 +565,192 @@ def get_pollution_event(event_id: str) -> PollutionEvent:
             detail=f"Pollution event '{event_id}' not found",
         )
     return event
+
+
+@router.get("/api/v1/health", response_model=HealthResponse, tags=["System"])
+def api_health_check() -> HealthResponse:
+    """API versioned health check endpoint."""
+    return health_check()
+
+
+# =============================================================================
+# AUTHORITY INCIDENT WORKFLOW & AUDIT APIS (PHASE 3C)
+# =============================================================================
+
+@router.post(
+    "/api/v1/incidents",
+    response_model=Incident,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Authority Incidents"],
+    summary="Create authority incident from corroborated pollution event",
+)
+def create_incident(request: CreateIncidentRequest) -> Incident:
+    """Create authority incident from verified pollution event.
+
+    Enforces D-017 minimum evidence diversity:
+    Events with >= 2 independent evidence sources escalate to ALERTED.
+    Single-source events default to DETECTED (requiring human review).
+    """
+    store = get_operational_store()
+    event = store.get_event(request.event_id)
+    if not event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Originating pollution event '{request.event_id}' not found",
+        )
+
+    incident = store.create_incident(request, event)
+    return incident
+
+
+@router.get(
+    "/api/v1/incidents",
+    response_model=List[Incident],
+    tags=["Authority Incidents"],
+    summary="List authority incidents with status and priority filters",
+)
+def list_incidents(
+    status: Optional[IncidentStatus] = Query(default=None, description="Filter by operational status"),
+    priority: Optional[IncidentPriority] = Query(default=None, description="Filter by priority"),
+    limit: int = Query(default=50, ge=1, le=100, description="Max incidents to return"),
+) -> List[Incident]:
+    """Retrieve tracked authority incidents sorted by creation timestamp descending."""
+    store = get_operational_store()
+    return store.list_incidents(status=status, priority=priority, limit=limit)
+
+
+@router.get(
+    "/api/v1/incidents/{incident_id}",
+    response_model=Incident,
+    tags=["Authority Incidents"],
+    summary="Retrieve authority incident detail",
+)
+def get_incident(incident_id: str) -> Incident:
+    """Retrieve incident by ID."""
+    store = get_operational_store()
+    incident = store.get_incident(incident_id)
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident '{incident_id}' not found",
+        )
+    return incident
+
+
+@router.post(
+    "/api/v1/incidents/{incident_id}/assign",
+    response_model=Incident,
+    tags=["Authority Incidents"],
+    summary="Assign incident to response unit",
+)
+def assign_incident(incident_id: str, request: AssignIncidentRequest) -> Incident:
+    """Assign incident to field officer / team. Transition to ASSIGNED."""
+    store = get_operational_store()
+    try:
+        return store.assign_incident(incident_id, request)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Incident '{incident_id}' not found")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/api/v1/incidents/{incident_id}/acknowledge",
+    response_model=Incident,
+    tags=["Authority Incidents"],
+    summary="Acknowledge incident by field responder",
+)
+def acknowledge_incident(incident_id: str, request: AcknowledgeIncidentRequest) -> Incident:
+    """Acknowledge incident. Transition to ACKNOWLEDGED."""
+    store = get_operational_store()
+    try:
+        return store.acknowledge_incident(incident_id, request)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Incident '{incident_id}' not found")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/api/v1/incidents/{incident_id}/investigate",
+    response_model=Incident,
+    tags=["Authority Incidents"],
+    summary="Mark incident as actively investigating",
+)
+def investigate_incident(incident_id: str, request: InvestigateIncidentRequest) -> Incident:
+    """Mark incident under active investigation. Transition to INVESTIGATING."""
+    store = get_operational_store()
+    try:
+        return store.investigate_incident(incident_id, request)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Incident '{incident_id}' not found")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/api/v1/incidents/{incident_id}/resolve",
+    response_model=Incident,
+    tags=["Authority Incidents"],
+    summary="Resolve incident with summary",
+)
+def resolve_incident(incident_id: str, request: ResolveIncidentRequest) -> Incident:
+    """Resolve incident. Transition to RESOLVED."""
+    store = get_operational_store()
+    try:
+        return store.resolve_incident(incident_id, request)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Incident '{incident_id}' not found")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/api/v1/incidents/{incident_id}/dismiss",
+    response_model=Incident,
+    tags=["Authority Incidents"],
+    summary="Dismiss incident as false positive or non-actionable",
+)
+def dismiss_incident(incident_id: str, request: DismissIncidentRequest) -> Incident:
+    """Dismiss incident. Transition to DISMISSED."""
+    store = get_operational_store()
+    try:
+        return store.dismiss_incident(incident_id, request)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Incident '{incident_id}' not found")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/api/v1/incidents/{incident_id}/notes",
+    response_model=IncidentNote,
+    tags=["Authority Incidents"],
+    summary="Add operational field note to incident",
+)
+def add_incident_note(incident_id: str, request: AddNoteRequest) -> IncidentNote:
+    """Append a field note to an active incident."""
+    store = get_operational_store()
+    try:
+        return store.add_note(incident_id, request)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Incident '{incident_id}' not found")
+
+
+@router.get(
+    "/api/v1/incidents/{incident_id}/audit",
+    response_model=List[AuditRecord],
+    tags=["Authority Incidents"],
+    summary="Retrieve immutable audit log for incident",
+)
+def get_incident_audit_log(incident_id: str) -> List[AuditRecord]:
+    """Retrieve complete audit history for this incident. Audit records cannot be modified."""
+    store = get_operational_store()
+    incident = store.get_incident(incident_id)
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident '{incident_id}' not found",
+        )
+    return store.get_audit_records(incident_id=incident_id)
+

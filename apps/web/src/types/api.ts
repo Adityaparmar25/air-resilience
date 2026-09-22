@@ -1,5 +1,16 @@
-export type EventStatus = "POSSIBLE" | "CORROBORATED" | "HIGH_CONFIDENCE" | "FALSE_POSITIVE";
-export type EventSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type EvidenceStatus = "FALSE_POSITIVE" | "POSSIBLE" | "CORROBORATED" | "HIGH_CONFIDENCE";
+export type EventStatus = EvidenceStatus;
+
+export type OperationalStatus =
+  | "DETECTED"
+  | "ALERTED"
+  | "ASSIGNED"
+  | "ACKNOWLEDGED"
+  | "INVESTIGATING"
+  | "RESOLVED"
+  | "DISMISSED";
+
+export type EventSeverity = "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
 
 export interface CitizenImageAnalysis {
   visible_smoke: boolean;
@@ -24,43 +35,114 @@ export interface CitizenReport {
 }
 
 export interface EvidenceSignal {
-  name: string;
-  weight: number;
+  source: string;
+  timestamp: string;
+  location: { lat: number; lng: number };
+  signal_type: string;
   score: number | null;
-  available: boolean;
-  weighted_contribution?: number;
-  notes?: string;
+  weight: number;
+  availability: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface EvidenceBreakdown {
-  ground_anomaly: EvidenceSignal;
-  satellite: EvidenceSignal;
-  citizen_reports: EvidenceSignal;
-  weather_context: EvidenceSignal;
-  fire_radiative_power: EvidenceSignal;
+  signals: Record<string, EvidenceSignal>;
+  fusion_score: number;
+  available_weight_sum: number;
+  available_sources_count: number;
+  corroborating_sources_count: number;
+  explanation_text: string;
+}
+
+export interface EvidenceCoverage {
+  ground_sensor: boolean;
+  citizen_report: boolean;
+  satellite: boolean;
+  weather: boolean;
+  fire: boolean;
+  available_count: number;
+  total_sources: number;
+  coverage_ratio: number;
+  diversity_eligible_for_alert: boolean;
+}
+
+export interface ForecastContext {
+  available: boolean;
+  current_pm25?: number | null;
+  forecast_6h?: number | null;
+  forecast_12h?: number | null;
+  forecast_24h?: number | null;
+  interval?: { lower_95?: number | null; upper_95?: number | null } | null;
+  provider_name?: string;
+  model_name?: string;
+  reason?: string;
+  generated_at?: string;
 }
 
 export interface LocationCell {
+  lat: number;
+  lng: number;
   cell_id: string;
-  center_lat: number;
-  center_lon: number;
-  radius_km: number;
 }
 
 export interface PollutionEvent {
   event_id: string;
-  cell: LocationCell;
-  timestamp_start: string;
-  timestamp_latest: string;
+  timestamp: string;
+  location: LocationCell;
+  evidence_status: EvidenceStatus;
+  operational_status: OperationalStatus;
   status: EventStatus;
   severity: EventSeverity;
-  fusion_score: number;
-  confidence: number;
+  event_type: string;
+  evidence: EvidenceBreakdown;
+  evidence_coverage: EvidenceCoverage;
+  forecast: ForecastContext;
   probable_source?: string | null;
+  human_verification_required: boolean;
+  report_ids: string[];
+  station_ids: string[];
+}
+
+export type IncidentPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type IncidentStatus = OperationalStatus;
+
+export interface IncidentNote {
+  note_id: string;
+  actor: string;
+  timestamp: string;
+  content: string;
+}
+
+export interface AuditRecord {
+  audit_id: string;
+  incident_id: string;
+  actor: string;
+  action: string;
+  previous_status?: IncidentStatus | null;
+  new_status?: IncidentStatus | null;
+  timestamp: string;
+  details?: Record<string, unknown>;
+}
+
+export interface Incident {
+  incident_id: string;
+  event_id: string;
+  priority: IncidentPriority;
+  status: IncidentStatus;
+  assigned_to?: string | null;
+  assigned_team?: string | null;
+  created_at: string;
+  acknowledged_at?: string | null;
+  investigating_at?: string | null;
+  resolved_at?: string | null;
+  dismissed_at?: string | null;
+  resolution_summary?: string | null;
+  dismissal_reason?: string | null;
+  notes: IncidentNote[];
+  evidence_status: EvidenceStatus;
+  evidence_coverage: EvidenceCoverage;
+  location: LocationCell;
+  probable_source?: string | null;
+  forecast: ForecastContext;
   explanation?: string | null;
-  evidence_breakdown: EvidenceBreakdown;
-  participating_station_ids: string[];
-  participating_report_ids: string[];
-  active: boolean;
-  needs_human_review: boolean;
 }

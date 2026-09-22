@@ -273,3 +273,52 @@ It is done only when:
 - another team member can run it,
 - its inputs/outputs match the agreed contract,
 - it does not break the end-to-end demo.
+
+---
+
+## D-016 — Architectural Separation of Evidence Status and Operational Lifecycle
+
+### Decision
+
+Separate the classification of scientific/multimodal evidence from the operational authority workflow lifecycle. Do not use a single status field for both meanings.
+
+Every event and incident explicitly distinguishes:
+
+1. **`evidence_status`**:
+   - `FALSE_POSITIVE`
+   - `POSSIBLE`
+   - `CORROBORATED`
+   - `HIGH_CONFIDENCE`
+
+2. **`operational_status`**:
+   - `DETECTED`
+   - `ALERTED`
+   - `ASSIGNED`
+   - `ACKNOWLEDGED`
+   - `INVESTIGATING`
+   - `RESOLVED`
+   - `DISMISSED`
+
+### Reason
+
+An event may have `HIGH_CONFIDENCE` evidence while simultaneously being in the operational state of `ASSIGNED` or `INVESTIGATING`. Collapsing these orthogonal dimensions conflated algorithmic confidence with human administrative response.
+
+---
+
+## D-017 — Minimum Evidence Diversity for Operational Alerting
+
+### Decision
+
+Before automatically creating an operational alert or escalating an event/incident to `ALERTED` status, the platform requires at least **two independent evidence classes** to be present and corroborating.
+
+### Examples
+
+- Ground Sensor + Citizen Report = **Eligible for automated alert**
+- Ground Sensor + Weather Dispersion Context = **Eligible for automated alert**
+- Citizen Photo only = **Requires manual human review** (`DETECTED`)
+- Gemini Vision output only = **Requires manual human review** (`DETECTED`)
+
+### Rule
+
+Existing fusion weights from D-006 are strictly preserved. Evidence signals that are unavailable remain `None` and are excluded from the normalization denominator (per D-007).
+

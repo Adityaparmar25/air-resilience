@@ -3,15 +3,23 @@
 import React, { useState, useEffect } from "react";
 import Header from "../components/Header";
 import AnalysisCard from "../components/AnalysisCard";
-import FusionScoreMeter from "../components/FusionScoreMeter";
 import EventDetailModal from "../components/EventDetailModal";
+import IncidentDetailModal from "../components/IncidentDetailModal";
 import {
-  submitCitizenReport,
-  analyzeCitizenReport,
+  createIncident,
   detectPollutionEvents,
   fetchEvents,
+  fetchIncidents,
+  submitCitizenReport,
+  analyzeCitizenReport,
 } from "../lib/api";
-import { CitizenReport, PollutionEvent, EventStatus } from "../types/api";
+import {
+  CitizenReport,
+  Incident,
+  IncidentPriority,
+  IncidentStatus,
+  PollutionEvent,
+} from "../types/api";
 
 const NCR_LOCATIONS = [
   { name: "Anand Vihar, Delhi", lat: 28.6469, lon: 77.3160, station: "DL001" },
@@ -42,7 +50,7 @@ const SAMPLE_IMAGES = [
 ];
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"citizen" | "events">("citizen");
+  const [activeTab, setActiveTab] = useState<"citizen" | "events" | "authority">("citizen");
 
   // Form State
   const [selectedLocation, setSelectedLocation] = useState(NCR_LOCATIONS[0]);
@@ -66,19 +74,30 @@ export default function Home() {
   const [selectedEvent, setSelectedEvent] = useState<PollutionEvent | null>(null);
   const [isDetectingEvents, setIsDetectingEvents] = useState(false);
 
-  // Load events
-  const loadEvents = async () => {
+  // Incidents State (Phase 3C Authority Workflow)
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+  const [incidentStatusFilter, setIncidentStatusFilter] = useState<string>("ALL");
+  const [incidentPriorityFilter, setIncidentPriorityFilter] = useState<string>("ALL");
+  const [isEscalating, setIsEscalating] = useState(false);
+
+  // Load events & incidents
+  const loadData = async () => {
     try {
-      const data = await fetchEvents();
-      setEvents(data);
+      const [eventsData, incidentsData] = await Promise.all([
+        fetchEvents(),
+        fetchIncidents(),
+      ]);
+      setEvents(eventsData);
+      setIncidents(incidentsData);
     } catch (err) {
-      console.error("Failed to load events:", err);
+      console.error("Failed to load data:", err);
     }
   };
 
   useEffect(() => {
-    loadEvents();
-    const interval = setInterval(loadEvents, 8000);
+    loadData();
+    const interval = setInterval(loadData, 6000);
     return () => clearInterval(interval);
   }, []);
 
@@ -104,7 +123,6 @@ export default function Home() {
     setErrorMessage(null);
 
     try {
-      // 1. Submit report
       const report = await submitCitizenReport({
         latitude: selectedLocation.lat,
         longitude: selectedLocation.lon,
@@ -116,7 +134,6 @@ export default function Home() {
       setCurrentReport(report);
       setIsSubmitting(false);
 
-      // 2. Trigger Gemini multimodal analysis
       setIsAnalyzing(true);
       const analyzed = await analyzeCitizenReport(report.id);
       setCurrentReport(analyzed);
@@ -142,7 +159,7 @@ export default function Home() {
       });
 
       setIsCorroborating(false);
-      await loadEvents();
+      await loadData();
 
       if (res.events && res.events.length > 0) {
         setSelectedEvent(res.events[0]);
@@ -158,7 +175,7 @@ export default function Home() {
     setIsDetectingEvents(true);
     try {
       await detectPollutionEvents({ force_corroboration: true });
-      await loadEvents();
+      await loadData();
     } catch (err: unknown) {
       console.error(err);
     } finally {
@@ -166,10 +183,52 @@ export default function Home() {
     }
   };
 
+  // Escalate Event to Incident
+  const handleEscalateEvent = async (eventId: string) => {
+    setIsEscalating(true);
+    setErrorMessage(null);
+    try {
+      const inc = await createIncident({
+        event_id: eventId,
+        actor: "Authority_Commander",
+        initial_notes: "Escalated from live Events Feed for response dispatch.",
+      });
+      await loadData();
+      setSelectedEvent(null);
+      setSelectedIncident(inc);
+      setActiveTab("authority");
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsEscalating(false);
+    }
+  };
+
   const filteredEvents = events.filter((ev) => {
     if (eventsFilter === "ALL") return true;
-    return ev.status === eventsFilter;
+    return ev.evidence_status === eventsFilter || ev.status === eventsFilter;
   });
+
+  const filteredIncidents = incidents.filter((inc) => {
+    if (incidentStatusFilter !== "ALL" && inc.status !== incidentStatusFilter) {
+      return false;
+    }
+    if (
+      incidentPriorityFilter !== "ALL" &&
+      inc.priority !== incidentPriorityFilter
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  const activeIncidentsCount = incidents.filter(
+    (i) =>
+      i.status === "ALERTED" ||
+      i.status === "ASSIGNED" ||
+      i.status === "ACKNOWLEDGED" ||
+      i.status === "INVESTIGATING"
+  ).length;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-black">
@@ -178,6 +237,7 @@ export default function Home() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         eventCount={events.length}
+        incidentCount={activeIncidentsCount}
       />
 
       {/* Main Content Area */}
@@ -186,14 +246,24 @@ export default function Home() {
         {errorMessage && (
           <div className="bg-rose-950/70 border border-rose-800 text-rose-200 px-4 py-3 rounded-xl flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                className="w-4 h-4 text-rose-400 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               <span>{errorMessage}</span>
             </div>
             <button
               onClick={() => setErrorMessage(null)}
-              className="text-rose-400 hover:text-white"
+              className="text-rose-400 hover:text-white cursor-pointer"
             >
               Dismiss
             </button>
@@ -212,7 +282,7 @@ export default function Home() {
                   <h2 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
                     <span>Submit Ground Observation</span>
                     <span className="text-[10px] bg-emerald-950 text-emerald-400 font-mono px-2 py-0.5 rounded border border-emerald-800/40">
-                      Phase 3B Ingestion
+                      Phase 3B/3C Ingestion
                     </span>
                   </h2>
                   <p className="text-xs text-slate-400 mt-1">
@@ -294,7 +364,6 @@ export default function Home() {
                     />
                   </div>
 
-                  {/* Image Preview if custom */}
                   {previewUrl && (
                     <div className="mt-2 rounded-xl overflow-hidden border border-slate-800 h-36 bg-black flex items-center justify-center">
                       <img
@@ -359,7 +428,6 @@ export default function Home() {
                     isCorroborating={isCorroborating}
                   />
 
-                  {/* Report Metadata Badge */}
                   <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
                     <div>
                       Report ID: <span className="font-mono text-slate-300">{currentReport.id}</span>
@@ -403,7 +471,6 @@ export default function Home() {
         {/* ========================================================================= */}
         {activeTab === "events" && (
           <div className="space-y-6">
-            {/* Top Bar: Controls & Filters */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
               <div>
                 <h2 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
@@ -418,7 +485,6 @@ export default function Home() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {/* Status Filters */}
                 {(["ALL", "HIGH_CONFIDENCE", "CORROBORATED", "POSSIBLE"] as const).map((filter) => (
                   <button
                     key={filter}
@@ -433,7 +499,6 @@ export default function Home() {
                   </button>
                 ))}
 
-                {/* Force Detect Trigger */}
                 <button
                   onClick={handleRunEventDetection}
                   disabled={isDetectingEvents}
@@ -447,67 +512,72 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Events Grid */}
             {filteredEvents.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredEvents.map((ev) => (
                   <div
                     key={ev.event_id}
-                    onClick={() => setSelectedEvent(ev)}
-                    className="group bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-lg shadow-black/20 hover:shadow-emerald-950/20 transition-all cursor-pointer flex flex-col justify-between"
+                    className="group bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-lg shadow-black/20 hover:shadow-emerald-950/20 transition-all flex flex-col justify-between"
                   >
                     <div>
-                      {/* Top Badges */}
                       <div className="flex items-center justify-between gap-2 mb-3">
                         <span className="font-mono text-[10px] text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                          {ev.cell.cell_id}
+                          {ev.location.cell_id}
                         </span>
                         <div className="flex items-center gap-1.5">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              ev.status === "HIGH_CONFIDENCE"
+                              ev.evidence_status === "HIGH_CONFIDENCE"
                                 ? "bg-rose-950 text-rose-300 border border-rose-800/60"
-                                : ev.status === "CORROBORATED"
+                                : ev.evidence_status === "CORROBORATED"
                                 ? "bg-amber-950 text-amber-300 border border-amber-800/60"
                                 : "bg-sky-950 text-sky-300 border border-sky-800/60"
                             }`}
                           >
-                            {ev.status}
+                            {ev.evidence_status}
                           </span>
                         </div>
                       </div>
 
-                      {/* Source & Description */}
-                      <h3 className="text-sm font-extrabold text-white group-hover:text-emerald-300 transition-colors">
+                      <h3
+                        onClick={() => setSelectedEvent(ev)}
+                        className="text-sm font-extrabold text-white group-hover:text-emerald-300 transition-colors cursor-pointer"
+                      >
                         {ev.probable_source || "Unspecified Emission"}
                       </h3>
                       <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                        {ev.explanation}
+                        {ev.evidence?.explanation_text}
                       </p>
+
+                      {/* Evidence coverage pill */}
+                      <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-400">
+                        <span>Coverage:</span>
+                        <span className="font-mono text-emerald-400 font-semibold bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                          {ev.evidence_coverage?.available_count || 0}/5 Sources
+                        </span>
+                        {ev.forecast?.available && (
+                          <span className="font-mono text-teal-400 bg-teal-950/40 px-1.5 py-0.5 rounded border border-teal-900/40">
+                            +24h: {ev.forecast.forecast_24h?.toFixed(0)} ug/m³
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Bottom Meta & Score */}
-                    <div className="mt-5 pt-3 border-t border-slate-800/80 flex items-center justify-between">
-                      <div className="text-[11px] text-slate-400">
-                        <div>Sensors: {ev.participating_station_ids.length}</div>
-                        <div>Reports: {ev.participating_report_ids.length}</div>
-                      </div>
+                    <div className="mt-5 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => setSelectedEvent(ev)}
+                        className="text-xs text-slate-300 hover:text-white flex items-center gap-1 font-semibold cursor-pointer"
+                      >
+                        Inspect Breakdown &rarr;
+                      </button>
 
-                      <div className="flex items-center gap-2">
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-500 uppercase block font-semibold">
-                            Fusion Score
-                          </span>
-                          <span className="font-mono text-sm font-bold text-emerald-400">
-                            {ev.fusion_score.toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="p-1.5 rounded-lg bg-slate-800 text-slate-400 group-hover:text-white">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </div>
-                      </div>
+                      <button
+                        onClick={() => handleEscalateEvent(ev.event_id)}
+                        disabled={isEscalating}
+                        className="px-2.5 py-1 rounded-lg bg-rose-950 hover:bg-rose-900 border border-rose-800/80 text-rose-300 text-[11px] font-bold transition-all cursor-pointer"
+                      >
+                        Escalate Incident
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -525,12 +595,179 @@ export default function Home() {
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
                   Submit a citizen report in the Vision Studio or click &quot;Run Spatial Fusion&quot; to correlate ground sensors with operational observation grids.
                 </p>
-                <button
-                  onClick={handleRunEventDetection}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all cursor-pointer shadow-lg shadow-emerald-600/30"
-                >
-                  Trigger Corroboration Engine
-                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 3: AUTHORITY COMMAND CENTER (PHASE 3C) */}
+        {/* ========================================================================= */}
+        {activeTab === "authority" && (
+          <div className="space-y-6">
+            {/* Top Metrics Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <span className="text-[11px] text-slate-400 block font-semibold">Total Incidents</span>
+                <span className="text-2xl font-extrabold text-white font-mono">{incidents.length}</span>
+              </div>
+              <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <span className="text-[11px] text-slate-400 block font-semibold">Active Responding</span>
+                <span className="text-2xl font-extrabold text-rose-400 font-mono">{activeIncidentsCount}</span>
+              </div>
+              <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <span className="text-[11px] text-slate-400 block font-semibold">Under Investigation</span>
+                <span className="text-2xl font-extrabold text-amber-400 font-mono">
+                  {incidents.filter((i) => i.status === "INVESTIGATING").length}
+                </span>
+              </div>
+              <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <span className="text-[11px] text-slate-400 block font-semibold">Resolved</span>
+                <span className="text-2xl font-extrabold text-emerald-400 font-mono">
+                  {incidents.filter((i) => i.status === "RESOLVED").length}
+                </span>
+              </div>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400">Status:</span>
+                {(["ALL", "ALERTED", "ASSIGNED", "ACKNOWLEDGED", "INVESTIGATING", "RESOLVED", "DISMISSED"] as const).map(
+                  (statusOpt) => (
+                    <button
+                      key={statusOpt}
+                      onClick={() => setIncidentStatusFilter(statusOpt)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        incidentStatusFilter === statusOpt
+                          ? "bg-slate-700 text-white"
+                          : "bg-slate-950 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {statusOpt}
+                    </button>
+                  )
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400">Priority:</span>
+                {(["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"] as const).map((pri) => (
+                  <button
+                    key={pri}
+                    onClick={() => setIncidentPriorityFilter(pri)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      incidentPriorityFilter === pri
+                        ? "bg-slate-700 text-white"
+                        : "bg-slate-950 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {pri}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Incidents Grid */}
+            {filteredIncidents.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredIncidents.map((inc) => (
+                  <div
+                    key={inc.incident_id}
+                    onClick={() => setSelectedIncident(inc)}
+                    className="bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-lg shadow-black/20 transition-all cursor-pointer flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="font-mono text-xs font-bold text-slate-300">
+                          {inc.incident_id}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              inc.priority === "CRITICAL"
+                                ? "bg-rose-950 text-rose-300 border-rose-800"
+                                : inc.priority === "HIGH"
+                                ? "bg-amber-950 text-amber-300 border-amber-800"
+                                : "bg-sky-950 text-sky-300 border-sky-800"
+                            }`}
+                          >
+                            {inc.priority}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              inc.status === "ALERTED"
+                                ? "bg-rose-950 text-rose-300 border-rose-800"
+                                : inc.status === "ASSIGNED"
+                                ? "bg-amber-950 text-amber-300 border-amber-800"
+                                : inc.status === "INVESTIGATING"
+                                ? "bg-teal-950 text-teal-300 border-teal-800"
+                                : inc.status === "RESOLVED"
+                                ? "bg-emerald-950 text-emerald-300 border-emerald-800"
+                                : "bg-slate-800 text-slate-400 border-slate-700"
+                            }`}
+                          >
+                            {inc.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      <h3 className="text-sm font-extrabold text-white">
+                        {inc.probable_source || "Corroborated Incident"}
+                      </h3>
+                      <div className="text-[11px] text-slate-400 mt-1">
+                        Location: {inc.location.lat.toFixed(4)}, {inc.location.lng.toFixed(4)}
+                      </div>
+
+                      {/* Evidence coverage */}
+                      <div className="mt-3 flex items-center justify-between text-xs bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+                        <span className="text-slate-400">Evidence Coverage:</span>
+                        <span className="font-mono font-bold text-emerald-400">
+                          {inc.evidence_coverage?.available_count || 0}/5 Sources
+                        </span>
+                      </div>
+
+                      {/* Forecast trend */}
+                      {inc.forecast?.available && (
+                        <div className="mt-2 text-xs text-slate-400 flex items-center justify-between bg-slate-950/40 p-2 rounded-lg border border-slate-800/80">
+                          <span>+24h PM2.5 Projection:</span>
+                          <span className="font-mono font-semibold text-teal-300">
+                            {inc.forecast.forecast_24h?.toFixed(0)} ug/m³
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                      <div>
+                        {inc.assigned_to ? (
+                          <span className="text-slate-300 font-medium">
+                            {inc.assigned_to}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 italic">Unassigned</span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-500">
+                        {new Date(inc.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-slate-900/30 border border-dashed border-slate-800 rounded-2xl p-12 text-center space-y-3">
+                <div className="h-12 w-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mx-auto">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <h4 className="text-sm font-semibold text-slate-300">
+                  No Authority Incidents Logged Yet
+                </h4>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Events can be escalated into authority incidents from the Events feed, or automatically alerted when minimum evidence diversity is achieved.
+                </p>
               </div>
             )}
           </div>
@@ -541,6 +778,14 @@ export default function Home() {
       <EventDetailModal
         event={selectedEvent}
         onClose={() => setSelectedEvent(null)}
+        onEscalateToIncident={handleEscalateEvent}
+      />
+
+      {/* Authority Incident Detail Modal */}
+      <IncidentDetailModal
+        incident={selectedIncident}
+        onClose={() => setSelectedIncident(null)}
+        onRefresh={loadData}
       />
     </div>
   );
