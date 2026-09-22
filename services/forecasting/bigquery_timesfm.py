@@ -24,10 +24,13 @@ class BigQueryTimesFMForecastProvider(ForecastProvider):
         self._baseline_provider = BaselineTimeSeriesForecastProvider()
 
     def is_gcp_configured(self) -> bool:
-        """Check whether minimum GCP credentials and dataset exist."""
+        """Check whether minimum GCP credentials file and dataset exist."""
+        from pathlib import Path
+        creds_path = self.settings.GOOGLE_APPLICATION_CREDENTIALS
+        has_real_creds = bool(creds_path and Path(creds_path).exists())
         return bool(
             self.settings.GOOGLE_CLOUD_PROJECT
-            and self.settings.GOOGLE_APPLICATION_CREDENTIALS
+            and has_real_creds
             and self.settings.BIGQUERY_DATASET
         )
 
