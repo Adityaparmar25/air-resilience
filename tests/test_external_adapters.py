@@ -111,6 +111,9 @@ def test_sentinel_adapter_failure_handling():
 def test_evidence_coverage_distinguishes_strength_from_coverage():
     """System must distinguish evidence coverage (availability) from evidence strength."""
     cov = EvidenceCoverage(
+        available_sources=["ground", "citizen", "weather"],
+        missing_sources=["satellite", "fire"],
+        coverage_level="PARTIAL",
         ground_sensor=True,
         citizen_report=True,
         weather=True,
@@ -125,4 +128,35 @@ def test_evidence_coverage_distinguishes_strength_from_coverage():
     assert cov.coverage_ratio == 0.6
     assert cov.satellite is False
     assert cov.fire is False
+    assert cov.available_sources == ["ground", "citizen", "weather"]
+    assert cov.missing_sources == ["satellite", "fire"]
+    assert cov.coverage_level == "PARTIAL"
     assert cov.diversity_eligible_for_alert is True
+
+
+def test_missing_evidence_is_never_zero_strength():
+    """Per D-007, missing evidence sources remain score=None and are never penalized as 0.0."""
+    now = datetime.now(timezone.utc)
+    sig_missing = EvidenceSignal(
+        source="satellite",
+        timestamp=now,
+        location={"lat": 28.65, "lng": 77.31},
+        signal_type="no2_column",
+        score=None,
+        weight=0.20,
+        availability=False,
+    )
+    assert sig_missing.availability is False
+    assert sig_missing.score is None
+    # Score is not zero
+    assert sig_missing.score != 0.0
+
+
+def test_forecast_unavailable_handling():
+    """Forecast integration returns structured unavailable status without raising exceptions."""
+    from services.fusion.engine import EvidenceFusionEngine
+    engine = EvidenceFusionEngine()
+    # Query with no station ID
+    ctx = engine.get_forecast_context(station_id=None, timestamp=datetime.now(timezone.utc))
+    assert ctx["available"] is False
+    assert "reason" in ctx

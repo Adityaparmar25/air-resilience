@@ -55,6 +55,9 @@ export interface EvidenceBreakdown {
 }
 
 export interface EvidenceCoverage {
+  available_sources?: string[];
+  missing_sources?: string[];
+  coverage_level?: string;
   ground_sensor: boolean;
   citizen_report: boolean;
   satellite: boolean;

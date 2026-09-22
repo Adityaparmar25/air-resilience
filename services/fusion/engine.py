@@ -450,7 +450,26 @@ class EvidenceFusionEngine:
 
         diversity_eligible = avail_count >= 2 and corrob_count >= 2
 
+        source_pairs = [
+            ("ground", ground_avail),
+            ("citizen", cit_avail),
+            ("weather", wx_avail),
+            ("satellite", sat_avail),
+            ("fire", fire_avail),
+        ]
+        available_sources = [s for s, avail in source_pairs if avail]
+        missing_sources = [s for s, avail in source_pairs if not avail]
+        if len(available_sources) == 5:
+            coverage_level = "FULL"
+        elif len(available_sources) >= 1:
+            coverage_level = "PARTIAL"
+        else:
+            coverage_level = "NONE"
+
         evidence_coverage = EvidenceCoverage(
+            available_sources=available_sources,
+            missing_sources=missing_sources,
+            coverage_level=coverage_level,
             ground_sensor=ground_avail,
             citizen_report=cit_avail,
             satellite=sat_avail,

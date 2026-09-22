@@ -121,6 +121,18 @@ class EvidenceCoverage(BaseModel):
     Unavailable signals remain False/null and are never penalized as zero.
     """
 
+    available_sources: List[str] = Field(
+        default_factory=list,
+        description="List of source keys with available operational observations (e.g. ['ground', 'citizen'])",
+    )
+    missing_sources: List[str] = Field(
+        default_factory=list,
+        description="List of source keys unavailable or missing observations (e.g. ['satellite', 'fire'])",
+    )
+    coverage_level: str = Field(
+        default="NONE",
+        description="Coverage classification level: NONE | PARTIAL | FULL",
+    )
     ground_sensor: bool = False
     citizen_report: bool = False
     satellite: bool = False
