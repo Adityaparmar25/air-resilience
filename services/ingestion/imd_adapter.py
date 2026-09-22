@@ -23,11 +23,14 @@ class IMDWeatherObservation(BaseModel):
     timestamp: datetime
     lat: float = Field(..., ge=-90.0, le=90.0)
     lon: float = Field(..., ge=-180.0, le=180.0)
+    latitude: float = Field(..., ge=-90.0, le=90.0)
+    longitude: float = Field(..., ge=-180.0, le=180.0)
     temperature: float = Field(..., description="Ambient temperature in Celsius")
     humidity: float = Field(..., ge=0.0, le=100.0, description="Relative humidity percentage")
     wind_speed: float = Field(..., ge=0.0, description="Wind speed in m/s")
     wind_direction: float = Field(..., ge=0.0, le=360.0, description="Wind direction in degrees")
     rainfall: float = Field(default=0.0, ge=0.0, description="Precipitation in mm")
+    source_status: str = Field(default="AVAILABLE", description="Source status: AVAILABLE | UNAVAILABLE | DEGRADED")
     station_name: Optional[str] = None
     distance_km: Optional[float] = None
     source_metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -94,11 +97,14 @@ class IMDAdapter:
                         timestamp=timestamp or parsed_ts,
                         lat=station_lat,
                         lon=station_lon,
+                        latitude=station_lat,
+                        longitude=station_lon,
                         temperature=float(item["temperature"]),
                         humidity=float(item["humidity"]),
                         wind_speed=float(item["wind_speed"]),
                         wind_direction=float(item["wind_direction"]),
                         rainfall=float(item.get("rainfall", 0.0)),
+                        source_status="AVAILABLE",
                         station_name=item.get("station_name"),
                         distance_km=round(dist, 2),
                         source_metadata=item.get("source_metadata", {}),

@@ -20,6 +20,7 @@ class SentinelObservation(BaseModel):
     """Normalized atmospheric observation from Sentinel-5P TROPOMI."""
 
     timestamp: datetime
+    observation_time: Optional[datetime] = None
     lat: float = Field(..., ge=-90.0, le=90.0)
     lon: float = Field(..., ge=-180.0, le=180.0)
     no2_tropospheric_column: Optional[float] = Field(
@@ -32,6 +33,9 @@ class SentinelObservation(BaseModel):
     )
     spatial_coverage_km: float = Field(default=7.0, description="Spatial resolution / pixel footprint")
     distance_km: Optional[float] = None
+    source: str = Field(default="Sentinel-5P/TROPOMI", description="Satellite data source identifier")
+    availability: bool = Field(default=True, description="Observation availability status")
+    error_metadata: Dict[str, Any] = Field(default_factory=dict, description="Error diagnostics if unavailable")
     source_metadata: Dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("source_metadata")
@@ -105,12 +109,15 @@ class Sentinel5PAdapter:
                     parsed_ts = datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00"))
                     best_obs = SentinelObservation(
                         timestamp=parsed_ts,
+                        observation_time=parsed_ts,
                         lat=pixel_lat,
                         lon=pixel_lon,
                         no2_tropospheric_column=float(item.get("no2_tropospheric_column", 0.0)),
                         aerosol_index=float(item.get("aerosol_index", 0.0)),
                         spatial_coverage_km=float(item.get("spatial_coverage_km", 7.0)),
                         distance_km=round(dist, 2),
+                        source="Sentinel-5P/TROPOMI",
+                        availability=True,
                         source_metadata=item.get("source_metadata", {}),
                     )
             except (KeyError, ValueError, TypeError):
