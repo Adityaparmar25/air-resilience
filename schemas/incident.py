@@ -91,6 +91,14 @@ class Incident(BaseModel):
     probable_source: Optional[str] = None
     forecast: Dict[str, Any] = Field(default_factory=dict)
     explanation: Optional[str] = None
+    provenance_type: str = Field(
+        default="REPLAY",
+        description="Data provenance: LIVE | RECENT | HISTORICAL | REPLAY | SIMULATION",
+    )
+    is_replay: bool = Field(
+        default=True,
+        description="True if based on historical replay or fixture data",
+    )
 
 
 # --- Request DTOs ---

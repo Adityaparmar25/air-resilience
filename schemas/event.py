@@ -183,6 +183,18 @@ class PollutionEvent(BaseModel):
         default_factory=list,
         description="List of linked ground monitoring stations within event radius",
     )
+    provenance_type: str = Field(
+        default="REPLAY",
+        description="Data provenance: LIVE | RECENT | HISTORICAL | REPLAY | SIMULATION",
+    )
+    provenance_label: Optional[str] = Field(
+        default=None,
+        description="Human readable provenance badge text (e.g. 'HISTORICAL REPLAY')",
+    )
+    is_replay: bool = Field(
+        default=True,
+        description="True if based on historical replay or fixture data",
+    )
 
     @model_validator(mode="after")
     def sync_status_and_coverage(self) -> "PollutionEvent":

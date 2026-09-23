@@ -362,3 +362,34 @@ City nodes participate in the federated network through a canonical interoperabi
 
 The platform core and event engine must remain city-agnostic and free from hardcoded municipal business logic. New urban centers, industrial clusters, and state pollution control boards can be added via declarative node registration and standard data contracts without altering engine code.
 
+---
+
+## D-020 — Real Historical Replay & Production Provenance Taxonomies
+
+### Decision
+
+All observations, events, incidents, and command center layers must explicitly carry a standardized provenance tag:
+- `LIVE`: Authenticated real-time stream from production government or satellite feeds.
+- `RECENT`: Recently cached authentic stream within standard sensor polling frequency.
+- `HISTORICAL`: Calibrated public historical records from official archives (e.g. CPCB CAAQMS, NASA FIRMS, Copernicus Sentinel-5P, IMD).
+- `REPLAY`: Deterministic playback of historical public or incident scenarios.
+- `SIMULATION`: Synthetic or stress-test fixture data used for edge testing.
+
+Replay or historical data must NEVER be represented as live data to users, operators, or evaluators.
+
+### Reason
+
+Maintaining credible provenance boundaries prevents misleading operators or evaluators into mistaking historical calibration episodes for live monitoring.
+
+---
+
+## D-021 — BigQuery TimesFM Integration & Provider Health Observability
+
+### Decision
+
+1. **Clean Forecast Provider Selection**:
+   The system supports declarative provider selection: `DEVELOPMENT` (local diurnal autoregressive baseline) or `BIGQUERY_TIMESFM` (Google Cloud BigQuery ML / TimesFM). Every forecast and event response must record `provider_name` and measured evaluation metrics (MAE, RMSE, MAPE) on validation benchmarks. Forecast accuracy numbers must never be invented.
+2. **Genuine Provider Health**:
+   The `/health` and `/api/v1/health` endpoints and UI indicators must report the real connectivity and operating mode (`available`, `unavailable`, `degraded`, `replay`) for CPCB, IMD, FIRMS, Sentinel-5P, Gemini, Forecast, and Federation. Availability must never be fabricated.
+
+

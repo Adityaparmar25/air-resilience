@@ -89,6 +89,22 @@ class MonitoringObservation(BaseModel):
         le=1000.0,
         description="Ozone concentration in ug/m3 (>= 0, null if unmeasured)",
     )
+    provenance_type: str = Field(
+        default="REPLAY",
+        description="Data provenance: LIVE | RECENT | HISTORICAL | REPLAY | SIMULATION",
+    )
+    is_synthetic: bool = Field(
+        default=False,
+        description="True if synthetic fixture; False if authentic public observation",
+    )
+    is_replay: bool = Field(
+        default=True,
+        description="True if historical replay or benchmark replay",
+    )
+    data_source: Optional[str] = Field(
+        default=None,
+        description="Originating data source descriptor (e.g. CPCB, OpenAQ)",
+    )
 
     @field_validator("timestamp")
     @classmethod
