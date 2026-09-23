@@ -114,7 +114,7 @@ def check_google_cloud_connectivity() -> Dict[str, Any]:
         results["missing_variables"].append("GEMINI_API_KEY")
 
     # 6. configured GEMINI_MODEL
-    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
     results["checks"]["GEMINI_MODEL"] = {
         "status": "CONFIGURED",
         "configured": True,

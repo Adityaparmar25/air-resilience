@@ -94,9 +94,15 @@ class FixtureGeminiAnalyzer:
 class GeminiVisionAnalyzer:
     """Multimodal citizen image analyzer using Google GenAI SDK with structured schema."""
 
-    def __init__(self, api_key: Optional[str] = None, force_fixture: bool = False):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        force_fixture: bool = False,
+    ):
         self.settings = get_settings()
         self.api_key = api_key or self.settings.GEMINI_API_KEY
+        self.model = model or getattr(self.settings, "GEMINI_MODEL", "gemini-3.5-flash-lite")
         self.force_fixture = force_fixture
         self._client = None
 
@@ -108,6 +114,23 @@ class GeminiVisionAnalyzer:
                 logger.warning("google-genai SDK not installed; falling back to fixture analyzer.")
             except Exception as e:
                 logger.warning(f"Failed to initialize Google GenAI Client: {e}; using fixture analyzer.")
+
+    @property
+    def configured_model(self) -> str:
+        """Return the active Gemini model name configured for this analyzer."""
+        return self.model
+
+    @property
+    def provider_name(self) -> str:
+        """Return the active provider descriptor."""
+        if self._client is not None and not self.force_fixture:
+            return f"google-genai:{self.model}"
+        return f"fixture:{self.model}"
+
+    @property
+    def is_live(self) -> bool:
+        """Return whether analyzer is operating with a live Google GenAI client."""
+        return self._client is not None and not self.force_fixture
 
     def analyze_image(
         self,
@@ -153,7 +176,7 @@ class GeminiVisionAnalyzer:
                 prompt_parts.append(f"\nReporter observation context: {context_description}")
 
             response = self._client.models.generate_content(
-                model="gemini-1.5-flash",
+                model=self.model,
                 contents=prompt_parts,
                 config=types.GenerateContentConfig(
                     system_instruction=GEMINI_VISION_SYSTEM_INSTRUCTION,
@@ -170,7 +193,7 @@ class GeminiVisionAnalyzer:
             return analysis
 
         except Exception as e:
-            logger.error(f"Live Gemini vision call failed: {e}; falling back to fixture analyzer.")
+            logger.error(f"Live Gemini vision call ({self.model}) failed: {e}; falling back to fixture analyzer.")
             return FixtureGeminiAnalyzer.analyze_bytes(
                 raw_bytes,
                 filename=filename,

@@ -99,3 +99,52 @@ def test_fixture_analyzer_deterministic_responses():
     assert res_clear.visible_smoke is False
     assert res_clear.visible_flames is False
     assert res_clear.smoke_intensity == SmokeIntensity.NONE
+
+
+def test_gemini_vision_analyzer_default_model():
+    """GeminiVisionAnalyzer defaults to gemini-3.5-flash-lite without hardcoding."""
+    analyzer = GeminiVisionAnalyzer(force_fixture=True)
+    assert analyzer.configured_model == "gemini-3.5-flash-lite"
+    assert "gemini-3.5-flash-lite" in analyzer.provider_name
+    assert analyzer.provider_name.startswith("fixture:")
+
+
+def test_gemini_vision_analyzer_custom_model_override():
+    """GeminiVisionAnalyzer allows explicit model configuration."""
+    custom_model = "gemini-3.1-flash-lite"
+    analyzer = GeminiVisionAnalyzer(model=custom_model, force_fixture=True)
+    assert analyzer.configured_model == custom_model
+    assert analyzer.provider_name == f"fixture:{custom_model}"
+
+
+def test_gemini_vision_analyzer_env_override(monkeypatch):
+    """GEMINI_MODEL environment variable sets default analyzer model dynamically."""
+    from apps.api import config
+    # Reset singleton settings to test env variable pickup
+    config._settings = None
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-3.5-flash")
+
+    analyzer = GeminiVisionAnalyzer(force_fixture=True)
+    assert analyzer.configured_model == "gemini-3.5-flash"
+    assert analyzer.provider_name == "fixture:gemini-3.5-flash"
+
+    # Reset singleton after test
+    config._settings = None
+
+
+def test_system_health_reports_configured_gemini_model():
+    """Health check endpoint accurately reports configured Gemini model and provider status."""
+    from fastapi.testclient import TestClient
+    from apps.api.main import app
+
+    client = TestClient(app)
+    response = client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert "providers" in data
+    assert "gemini" in data["providers"]
+    gemini_info = data["providers"]["gemini"]
+    assert "model" in gemini_info
+    assert gemini_info["model"] == "gemini-3.5-flash-lite"
+    assert "provider" in gemini_info
+    assert gemini_info["status"] in ("available", "unavailable")

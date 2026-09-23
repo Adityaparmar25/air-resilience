@@ -104,12 +104,13 @@ def compute_provider_health() -> Dict[str, Dict[str, Any]]:
 
     # 5. Gemini
     gemini_key = settings.GEMINI_API_KEY
+    gemini_model = getattr(settings, "GEMINI_MODEL", "gemini-3.5-flash-lite")
     if gemini_key and len(gemini_key) > 5 and not gemini_key.startswith("your_"):
         gemini_status = "available"
-        gemini_details = "Google Gemini multimodal vision model active"
+        gemini_details = f"Google Gemini multimodal vision model active ({gemini_model})"
     else:
         gemini_status = "unavailable"
-        gemini_details = "GEMINI_API_KEY unconfigured; offline visual classifier fallback"
+        gemini_details = f"GEMINI_API_KEY unconfigured; offline visual classifier fallback ({gemini_model})"
 
     # 6. Forecast
     forecast_provider = getattr(settings, "FORECAST_PROVIDER", "DEVELOPMENT")
@@ -144,7 +145,13 @@ def compute_provider_health() -> Dict[str, Dict[str, Any]]:
         "imd": {"status": imd_status, "mode": "replay" if imd_status == "replay" else "live", "details": imd_details},
         "firms": {"status": firms_status, "mode": "replay" if firms_status == "replay" else "live", "details": firms_details},
         "sentinel": {"status": sentinel_status, "mode": "replay" if sentinel_status == "replay" else "live", "details": sentinel_details},
-        "gemini": {"status": gemini_status, "mode": "live" if gemini_status == "available" else "offline", "details": gemini_details},
+        "gemini": {
+            "status": gemini_status,
+            "mode": "live" if gemini_status == "available" else "offline",
+            "provider": "google-genai" if gemini_status == "available" else "fixture",
+            "model": gemini_model,
+            "details": gemini_details,
+        },
         "forecast": {"status": forecast_status, "mode": forecast_provider.lower(), "details": forecast_details},
         "federation": {"status": federation_status, "mode": "federated", "details": federation_details},
     }

@@ -30,6 +30,10 @@ class Settings(BaseSettings):
         default=None,
         description="Gemini API Key for multimodal observation interpretation",
     )
+    GEMINI_MODEL: str = Field(
+        default="gemini-3.5-flash-lite",
+        description="Gemini model name for multimodal vision analysis",
+    )
 
     # Operational & Analytical Database Settings
     FIRESTORE_DATABASE: str = Field(
