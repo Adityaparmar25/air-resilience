@@ -49,6 +49,7 @@ class AuditRecord(BaseModel):
     audit_id: str = Field(default_factory=lambda: f"aud_{uuid.uuid4().hex[:10]}")
     incident_id: str
     actor: str = Field(..., description="User or automated agent triggering the transition")
+    actor_id: str = Field(default="", description="Identifier of the actor")
     action: str = Field(
         ...,
         description="Action keyword: CREATE | ALERT | ASSIGN | ACKNOWLEDGE | INVESTIGATE | RESOLVE | DISMISS | ADD_NOTE",
@@ -57,6 +58,12 @@ class AuditRecord(BaseModel):
     new_status: Optional[IncidentStatus] = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     details: Dict[str, Any] = Field(default_factory=dict)
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.actor_id and self.actor:
+            self.actor_id = self.actor
+        elif not self.actor and self.actor_id:
+            self.actor = self.actor_id
 
 
 class Incident(BaseModel):

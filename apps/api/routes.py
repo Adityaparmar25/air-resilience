@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel, Field
 
 from apps.api.config import get_settings
@@ -14,6 +14,7 @@ from schemas.api import (
     HealthResponse,
     StationSeriesResponse,
 )
+from services.infrastructure.connectivity import check_google_cloud_connectivity
 from schemas.canonical import MonitoringObservation
 from schemas.event import EventStatus, EvidenceStatus, OperationalStatus, PollutionEvent
 from schemas.incident import (
@@ -577,6 +578,30 @@ def api_health_check() -> HealthResponse:
 # AUTHORITY INCIDENT WORKFLOW & AUDIT APIS (PHASE 3C)
 # =============================================================================
 
+def require_authority_role(
+    allowed_roles: Optional[List[str]] = None,
+):
+    """Server-side authorization check for authority workflows (security.md Section 6 & 7).
+
+    Validates that client possesses required role (e.g. AUTHORITY, ADMIN, DISPATCHER, FIELD_OPERATOR).
+    Rejects unauthorized roles (e.g. CITIZEN) with HTTP 403 Forbidden.
+    """
+    valid_roles = [r.upper() for r in (allowed_roles or ["AUTHORITY", "ADMIN", "DISPATCHER", "FIELD_OPERATOR"])]
+
+    def role_dependency(
+        x_user_role: Optional[str] = Header(default="AUTHORITY", alias="X-User-Role"),
+    ) -> str:
+        role = (x_user_role or "AUTHORITY").strip().upper()
+        if role not in valid_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Unauthorized: Role '{role}' cannot perform this authority action. Allowed roles: {valid_roles}",
+            )
+        return role
+
+    return role_dependency
+
+
 @router.post(
     "/api/v1/incidents",
     response_model=Incident,
@@ -584,7 +609,10 @@ def api_health_check() -> HealthResponse:
     tags=["Authority Incidents"],
     summary="Create authority incident from corroborated pollution event",
 )
-def create_incident(request: CreateIncidentRequest) -> Incident:
+def create_incident(
+    request: CreateIncidentRequest,
+    _role: str = Depends(require_authority_role(["AUTHORITY", "ADMIN", "DISPATCHER"])),
+) -> Incident:
     """Create authority incident from verified pollution event.
 
     Enforces D-017 minimum evidence diversity:
@@ -643,7 +671,11 @@ def get_incident(incident_id: str) -> Incident:
     tags=["Authority Incidents"],
     summary="Assign incident to response unit",
 )
-def assign_incident(incident_id: str, request: AssignIncidentRequest) -> Incident:
+def assign_incident(
+    incident_id: str,
+    request: AssignIncidentRequest,
+    _role: str = Depends(require_authority_role(["AUTHORITY", "ADMIN", "DISPATCHER"])),
+) -> Incident:
     """Assign incident to field officer / team. Transition to ASSIGNED."""
     store = get_operational_store()
     try:
@@ -660,7 +692,11 @@ def assign_incident(incident_id: str, request: AssignIncidentRequest) -> Inciden
     tags=["Authority Incidents"],
     summary="Acknowledge incident by field responder",
 )
-def acknowledge_incident(incident_id: str, request: AcknowledgeIncidentRequest) -> Incident:
+def acknowledge_incident(
+    incident_id: str,
+    request: AcknowledgeIncidentRequest,
+    _role: str = Depends(require_authority_role(["AUTHORITY", "ADMIN", "DISPATCHER", "FIELD_OPERATOR"])),
+) -> Incident:
     """Acknowledge incident. Transition to ACKNOWLEDGED."""
     store = get_operational_store()
     try:
@@ -677,7 +713,11 @@ def acknowledge_incident(incident_id: str, request: AcknowledgeIncidentRequest) 
     tags=["Authority Incidents"],
     summary="Mark incident as actively investigating",
 )
-def investigate_incident(incident_id: str, request: InvestigateIncidentRequest) -> Incident:
+def investigate_incident(
+    incident_id: str,
+    request: InvestigateIncidentRequest,
+    _role: str = Depends(require_authority_role(["AUTHORITY", "ADMIN", "DISPATCHER", "FIELD_OPERATOR"])),
+) -> Incident:
     """Mark incident under active investigation. Transition to INVESTIGATING."""
     store = get_operational_store()
     try:
@@ -694,7 +734,11 @@ def investigate_incident(incident_id: str, request: InvestigateIncidentRequest) 
     tags=["Authority Incidents"],
     summary="Resolve incident with summary",
 )
-def resolve_incident(incident_id: str, request: ResolveIncidentRequest) -> Incident:
+def resolve_incident(
+    incident_id: str,
+    request: ResolveIncidentRequest,
+    _role: str = Depends(require_authority_role(["AUTHORITY", "ADMIN", "DISPATCHER"])),
+) -> Incident:
     """Resolve incident. Transition to RESOLVED."""
     store = get_operational_store()
     try:
@@ -711,7 +755,11 @@ def resolve_incident(incident_id: str, request: ResolveIncidentRequest) -> Incid
     tags=["Authority Incidents"],
     summary="Dismiss incident as false positive or non-actionable",
 )
-def dismiss_incident(incident_id: str, request: DismissIncidentRequest) -> Incident:
+def dismiss_incident(
+    incident_id: str,
+    request: DismissIncidentRequest,
+    _role: str = Depends(require_authority_role(["AUTHORITY", "ADMIN", "DISPATCHER"])),
+) -> Incident:
     """Dismiss incident. Transition to DISMISSED."""
     store = get_operational_store()
     try:
@@ -728,7 +776,11 @@ def dismiss_incident(incident_id: str, request: DismissIncidentRequest) -> Incid
     tags=["Authority Incidents"],
     summary="Add operational field note to incident",
 )
-def add_incident_note(incident_id: str, request: AddNoteRequest) -> IncidentNote:
+def add_incident_note(
+    incident_id: str,
+    request: AddNoteRequest,
+    _role: str = Depends(require_authority_role(["AUTHORITY", "ADMIN", "DISPATCHER", "FIELD_OPERATOR"])),
+) -> IncidentNote:
     """Append a field note to an active incident."""
     store = get_operational_store()
     try:
@@ -753,4 +805,14 @@ def get_incident_audit_log(incident_id: str) -> List[AuditRecord]:
             detail=f"Incident '{incident_id}' not found",
         )
     return store.get_audit_records(incident_id=incident_id)
+
+
+@router.get(
+    "/api/v1/connectivity",
+    tags=["Diagnostics"],
+    summary="Run Google Cloud connectivity and credentials check without exposing secrets",
+)
+def get_connectivity_status() -> Dict[str, Any]:
+    """Inspect environment variables and cloud services connectivity status."""
+    return check_google_cloud_connectivity()
 

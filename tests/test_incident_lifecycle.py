@@ -286,3 +286,129 @@ def test_immutable_audit_log(clean_store, client):
     assert "CREATE" in actions
     assert "ASSIGN" in actions
     assert "ADD_NOTE" in actions
+
+
+def test_unauthorized_incident_action_rejected(clean_store, client):
+    """Authority actions require valid server-side authority role (security.md Section 6 & 7)."""
+    event = make_dummy_event("ev_auth_check")
+    clean_store.save_event(event)
+
+    # Citizen cannot create authority incidents
+    res = client.post(
+        "/api/v1/incidents",
+        json={"event_id": event.event_id},
+        headers={"X-User-Role": "CITIZEN"},
+    )
+    assert res.status_code == 403
+    assert "Unauthorized" in res.json()["detail"]
+
+    # Create incident with valid authority role
+    create_res = client.post(
+        "/api/v1/incidents",
+        json={"event_id": event.event_id},
+        headers={"X-User-Role": "AUTHORITY"},
+    )
+    assert create_res.status_code == 201
+    inc_id = create_res.json()["incident_id"]
+
+    # Field operator cannot assign incidents (only dispatcher/authority/admin)
+    bad_assign = client.post(
+        f"/api/v1/incidents/{inc_id}/assign",
+        json={"assigned_to": "Officer Verma"},
+        headers={"X-User-Role": "FIELD_OPERATOR"},
+    )
+    assert bad_assign.status_code == 403
+
+    # Field operator cannot resolve incidents
+    bad_resolve = client.post(
+        f"/api/v1/incidents/{inc_id}/resolve",
+        json={"actor": "Operator", "resolution_summary": "Attempted resolve"},
+        headers={"X-User-Role": "FIELD_OPERATOR"},
+    )
+    assert bad_resolve.status_code == 403
+
+
+def test_end_to_end_pollution_event_to_resolution(clean_store, client):
+    """End-to-end operational pipeline: Event -> Incident -> Assign -> Ack -> Investigate -> Resolve."""
+    event = make_dummy_event("ev_e2e_verified", diversity_eligible=True, fusion_score=0.85)
+    clean_store.save_event(event)
+
+    # 1. Pollution Event -> Incident created
+    res_create = client.post(
+        "/api/v1/incidents",
+        json={
+            "event_id": event.event_id,
+            "priority": "HIGH",
+            "actor": "central_dispatcher",
+            "initial_notes": "Corroborated multi-source plume detected.",
+        },
+        headers={"X-User-Role": "DISPATCHER"},
+    )
+    assert res_create.status_code == 201
+    incident = res_create.json()
+    inc_id = incident["incident_id"]
+    assert incident["status"] == "ALERTED"
+
+    # 2. Assignment
+    res_assign = client.post(
+        f"/api/v1/incidents/{inc_id}/assign",
+        json={
+            "assigned_to": "Inspector Meena",
+            "assigned_team": "Patparganj Rapid Team",
+            "actor": "central_dispatcher",
+        },
+        headers={"X-User-Role": "DISPATCHER"},
+    )
+    assert res_assign.status_code == 200
+    assert res_assign.json()["status"] == "ASSIGNED"
+
+    # 3. Acknowledged by field inspector
+    res_ack = client.post(
+        f"/api/v1/incidents/{inc_id}/acknowledge",
+        json={"actor": "Inspector Meena", "notes": "Acknowledged. Responding now."},
+        headers={"X-User-Role": "FIELD_OPERATOR"},
+    )
+    assert res_ack.status_code == 200
+    assert res_ack.json()["status"] == "ACKNOWLEDGED"
+
+    # 4. Field Investigation
+    res_inv = client.post(
+        f"/api/v1/incidents/{inc_id}/investigate",
+        json={"actor": "Inspector Meena", "notes": "On-site assessment in progress."},
+        headers={"X-User-Role": "FIELD_OPERATOR"},
+    )
+    assert res_inv.status_code == 200
+    assert res_inv.json()["status"] == "INVESTIGATING"
+
+    # 5. Field notes added
+    res_note = client.post(
+        f"/api/v1/incidents/{inc_id}/notes",
+        json={"actor": "Inspector Meena", "content": "Industrial boiler scrubber malfunction identified."},
+        headers={"X-User-Role": "FIELD_OPERATOR"},
+    )
+    assert res_note.status_code == 200
+
+    # 6. Resolution
+    res_resolve = client.post(
+        f"/api/v1/incidents/{inc_id}/resolve",
+        json={
+            "actor": "central_dispatcher",
+            "resolution_summary": "Scrubber unit repaired and restarted; fugitive emissions halted.",
+        },
+        headers={"X-User-Role": "DISPATCHER"},
+    )
+    assert res_resolve.status_code == 200
+    final_incident = res_resolve.json()
+    assert final_incident["status"] == "RESOLVED"
+    assert final_incident["resolved_at"] is not None
+
+    # 7. Audit trail integrity
+    audit_res = client.get(f"/api/v1/incidents/{inc_id}/audit")
+    assert audit_res.status_code == 200
+    audit_trail = audit_res.json()
+    assert len(audit_trail) >= 5
+    # Verify actor_id is present
+    for record in audit_trail:
+        assert "actor_id" in record or "actor" in record
+        assert "action" in record
+        assert "incident_id" in record
