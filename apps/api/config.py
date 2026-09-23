@@ -41,13 +41,27 @@ class Settings(BaseSettings):
         description="BigQuery analytical dataset for historical observations and ML",
     )
 
+    # Forecasting & Data Mode
+    FORECAST_PROVIDER: str = Field(
+        default="DEVELOPMENT",
+        description="Forecast provider selection: DEVELOPMENT | BIGQUERY_TIMESFM",
+    )
+    DATA_MODE: str = Field(
+        default="HISTORICAL_REPLAY",
+        description="Operational data mode: LIVE | HISTORICAL_REPLAY",
+    )
+    CORS_ORIGINS: str = Field(
+        default="*",
+        description="Allowed CORS origins (comma-separated or '*' for dev)",
+    )
+
     # Application Environment
     ENVIRONMENT: str = Field(
         default="development",
         description="Runtime environment: development | test | staging | production",
     )
     HOST: str = Field(default="0.0.0.0", description="API listen host")
-    PORT: int = Field(default=8000, description="API listen port")
+    PORT: int = Field(default=8000, description="API listen port (Cloud Run standard)")
     LOG_LEVEL: str = Field(default="INFO", description="Logging verbosity")
 
     @field_validator("ENVIRONMENT")

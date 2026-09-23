@@ -7,7 +7,7 @@ Never invent accuracy numbers (Decision D-008).
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, model_validator
 
 from schemas.canonical import MonitoringObservation
@@ -57,12 +57,17 @@ class ForecastResponse(BaseModel):
         default="development_baseline",
         description="Identifies provider: 'development_baseline' | 'bigquery_timesfm'",
     )
+    measured_metrics: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Measured validation metrics (MAE, RMSE, MAPE) on benchmark data; never invented",
+    )
 
     def to_contract_dict(self) -> Dict[str, Any]:
         """Produce the exact dictionary required by Phase 3A specification."""
-        return {
+        res: Dict[str, Any] = {
             "station_id": self.station_id,
             "horizon": self.horizon,
+            "provider_type": self.provider_type,
             "predictions": [
                 {
                     "timestamp": p.timestamp.isoformat(),
@@ -73,6 +78,9 @@ class ForecastResponse(BaseModel):
                 for p in self.predictions
             ],
         }
+        if self.measured_metrics:
+            res["measured_metrics"] = self.measured_metrics
+        return res
 
 
 class ForecastProvider(ABC):
