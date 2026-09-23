@@ -10,13 +10,18 @@ from services.forecasting.base import PredictionPoint
 
 
 class HealthResponse(BaseModel):
-    """System health check response."""
+    """System health check response with genuine provider status indicators."""
 
-    status: str = Field(default="ok", description="Health status")
+    status: str = Field(default="ok", description="Overall health status: ok | degraded | unhealthy")
     service: str = Field(default="air-resilience-api", description="Service name")
     version: str = Field(default="0.1.0", description="API version")
     environment: str = Field(default="development", description="Runtime environment")
+    data_mode: str = Field(default="HISTORICAL_REPLAY", description="Current data mode: HISTORICAL_REPLAY | LIVE")
     timestamp: datetime = Field(description="Server timestamp")
+    providers: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Genuine status indicators for CPCB, IMD, FIRMS, Sentinel-5P, Gemini, Forecast, Federation",
+    )
 
 
 class StationSeriesResponse(BaseModel):
