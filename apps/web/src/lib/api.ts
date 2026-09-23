@@ -1,4 +1,15 @@
-import { AuditRecord, CitizenReport, Incident, IncidentNote, PollutionEvent } from "../types/api";
+import {
+  AuditRecord,
+  CitizenReport,
+  CityNode,
+  FederatedInferenceRequest,
+  FederatedInferenceResponse,
+  FederatedRound,
+  Incident,
+  IncidentNote,
+  ModelParams,
+  PollutionEvent,
+} from "../types/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -294,6 +305,113 @@ export async function fetchIncidentAudit(incidentId: string): Promise<AuditRecor
 
   if (!res.ok) {
     throw new Error(`Failed to fetch audit records: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+// =============================================================================
+// FEDERATION NETWORK API
+// =============================================================================
+
+export async function fetchFederationNodes(): Promise<CityNode[]> {
+  const res = await fetch(`${API_BASE}/api/v1/federation/nodes`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch federation nodes: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchFederationRounds(): Promise<FederatedRound[]> {
+  const res = await fetch(`${API_BASE}/api/v1/federation/rounds`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch federation rounds: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchFederationRound(roundId: string): Promise<FederatedRound> {
+  const res = await fetch(`${API_BASE}/api/v1/federation/rounds/${encodeURIComponent(roundId)}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch round ${roundId}: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function createFederationRound(payload?: {
+  participating_nodes?: string[];
+  base_model_version?: string;
+}): Promise<FederatedRound> {
+  const res = await fetch(`${API_BASE}/api/v1/federation/rounds`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Create round failed: ${err}`);
+  }
+  return await res.json();
+}
+
+export async function trainFederationRound(
+  roundId: string,
+  payload?: { epochs?: number; learning_rate?: number }
+): Promise<FederatedRound> {
+  const res = await fetch(`${API_BASE}/api/v1/federation/rounds/${encodeURIComponent(roundId)}/train`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Local training failed: ${err}`);
+  }
+  return await res.json();
+}
+
+export async function aggregateFederationRound(
+  roundId: string,
+  payload?: { min_required_nodes?: number }
+): Promise<FederatedRound> {
+  const res = await fetch(`${API_BASE}/api/v1/federation/rounds/${encodeURIComponent(roundId)}/aggregate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Aggregation failed: ${err}`);
+  }
+  return await res.json();
+}
+
+export async function fetchCurrentFederationModel(): Promise<ModelParams> {
+  const res = await fetch(`${API_BASE}/api/v1/federation/models/current`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch model: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function runFederationInference(
+  payload: FederatedInferenceRequest
+): Promise<FederatedInferenceResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/federation/infer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Inference failed: ${err}`);
   }
   return await res.json();
 }

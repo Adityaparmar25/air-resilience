@@ -5,6 +5,7 @@ import Header from "../components/Header";
 import AnalysisCard from "../components/AnalysisCard";
 import EventDetailModal from "../components/EventDetailModal";
 import IncidentDetailModal from "../components/IncidentDetailModal";
+import FederationNetworkView from "../components/FederationNetworkView";
 import {
   createIncident,
   detectPollutionEvents,
@@ -50,7 +51,7 @@ const SAMPLE_IMAGES = [
 ];
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"citizen" | "events" | "authority">("citizen");
+  const [activeTab, setActiveTab] = useState<"citizen" | "events" | "authority" | "federation">("citizen");
 
   // Form State
   const [selectedLocation, setSelectedLocation] = useState(NCR_LOCATIONS[0]);
@@ -772,6 +773,9 @@ export default function Home() {
             )}
           </div>
         )}
+
+        {/* Tab 4: Federation Network (Multi-City Interoperability) */}
+        {activeTab === "federation" && <FederationNetworkView />}
       </main>
 
       {/* Deep Event Inspection Modal */}

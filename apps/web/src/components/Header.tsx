@@ -4,8 +4,8 @@ import React, { useEffect, useState } from "react";
 import { checkApiHealth } from "../lib/api";
 
 interface HeaderProps {
-  activeTab: "citizen" | "events" | "authority";
-  setActiveTab: (tab: "citizen" | "events" | "authority") => void;
+  activeTab: "citizen" | "events" | "authority" | "federation";
+  setActiveTab: (tab: "citizen" | "events" | "authority" | "federation") => void;
   eventCount: number;
   incidentCount: number;
 }
@@ -23,7 +23,7 @@ export default function Header({
     const check = async () => {
       const res = await checkApiHealth();
       if (mounted) {
-        setApiOnline(res.status === "ok" || res.status === "healthy");
+        setApiOnline(res.status === "ok" || res.status === "healthy" || res.status === "HEALTHY");
       }
     };
     check();
@@ -60,20 +60,20 @@ export default function Header({
                 AIR-RESILIENCE
               </span>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/30">
-                Phase 3C
+                Federated Interop
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Authority Operations &bull; Multimodal Evidence &bull; Forecast Context
+              Authority Operations &bull; Multimodal Evidence &bull; Multi-City Federation
             </p>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center bg-slate-900/90 p-1.5 rounded-xl border border-slate-800">
+        <div className="flex items-center bg-slate-900/90 p-1.5 rounded-xl border border-slate-800 flex-wrap gap-1">
           <button
             onClick={() => setActiveTab("citizen")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === "citizen"
                 ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30"
                 : "text-slate-400 hover:text-white hover:bg-slate-800/50"
@@ -88,7 +88,7 @@ export default function Header({
 
           <button
             onClick={() => setActiveTab("events")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === "events"
                 ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30"
                 : "text-slate-400 hover:text-white hover:bg-slate-800/50"
@@ -107,7 +107,7 @@ export default function Header({
 
           <button
             onClick={() => setActiveTab("authority")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === "authority"
                 ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30"
                 : "text-slate-400 hover:text-white hover:bg-slate-800/50"
@@ -116,12 +116,26 @@ export default function Header({
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
-            Authority Command Center
+            Authority Command
             {incidentCount > 0 && (
               <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
                 {incidentCount}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab("federation")}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === "federation"
+                ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+            </svg>
+            Federation Network
           </button>
         </div>
 

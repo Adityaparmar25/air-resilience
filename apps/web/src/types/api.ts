@@ -149,3 +149,72 @@ export interface Incident {
   forecast: ForecastContext;
   explanation?: string | null;
 }
+
+export type NodeStatus = "ACTIVE" | "OFFLINE" | "TRAINING" | "SYNCED" | "FAILED";
+export type RoundStatus = "CREATED" | "TRAINING" | "AGGREGATING" | "COMPLETED" | "FAILED";
+
+export interface CityNode {
+  node_id: string;
+  region: string;
+  state: string;
+  country: string;
+  schema_version: string;
+  model_version: string;
+  last_sync: string;
+  status: NodeStatus;
+  supported_signals: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface ModelParams {
+  feature_names: string[];
+  weights: number[];
+  bias: number;
+  model_version: string;
+}
+
+export interface ModelUpdate {
+  node_id: string;
+  round_id: string;
+  base_model_version: string;
+  sample_count: number;
+  update_hash: string;
+  model_params: ModelParams;
+  training_metrics: Record<string, number>;
+  created_at: string;
+}
+
+export interface FederatedRound {
+  round_id: string;
+  started_at: string;
+  completed_at?: string | null;
+  participating_nodes: string[];
+  global_model_version: string;
+  aggregation_method: string;
+  status: RoundStatus;
+  metrics: Record<string, any>;
+  node_updates: Record<string, ModelUpdate>;
+}
+
+export interface FederatedInferenceRequest {
+  node_id?: string;
+  use_global_model?: boolean;
+  pm25: number;
+  pm10?: number;
+  no2?: number;
+  temperature?: number;
+  humidity?: number;
+  wind_speed?: number;
+  wind_direction?: number;
+  hour?: number;
+  day_of_week?: number;
+}
+
+export interface FederatedInferenceResponse {
+  predicted_pm25_next_hour: number;
+  predicted_risk_index: number;
+  risk_level: string;
+  model_version: string;
+  model_source: string;
+  features_used: Record<string, number>;
+}
