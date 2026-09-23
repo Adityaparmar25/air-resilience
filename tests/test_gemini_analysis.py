@@ -148,3 +148,35 @@ def test_system_health_reports_configured_gemini_model():
     assert gemini_info["model"] == "gemini-3.5-flash-lite"
     assert "provider" in gemini_info
     assert gemini_info["status"] in ("available", "unavailable")
+
+
+def test_gemini_vision_analyzer_disables_function_calling_and_tools(monkeypatch):
+    """Vision analysis must explicitly omit tools and disable automatic function calling."""
+    from unittest.mock import MagicMock
+    from schemas.citizen_image_analysis import CitizenImageAnalysis, VisualEventType, SmokeIntensity
+
+    analyzer = GeminiVisionAnalyzer(api_key="fake-key-for-test", force_fixture=False)
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = CitizenImageAnalysis(
+        visible_smoke=True,
+        visible_flames=False,
+        event_type=VisualEventType.INDUSTRIAL_EMISSIONS,
+        smoke_intensity=SmokeIntensity.HEAVY,
+        visual_evidence="Plume visible from smokestack.",
+        confidence=0.92,
+    ).model_dump_json()
+    mock_client.models.generate_content.return_value = mock_response
+    analyzer._client = mock_client
+
+    sample_img = SAMPLE_DIR / "industrial_smoke.jpg"
+    res = analyzer.analyze_image(sample_img)
+
+    assert res.visible_smoke is True
+    assert mock_client.models.generate_content.called
+    _, kwargs = mock_client.models.generate_content.call_args
+    passed_config = kwargs.get("config")
+    assert passed_config is not None
+    assert passed_config.tools is None
+    assert passed_config.automatic_function_calling is not None
+    assert passed_config.automatic_function_calling.disable is True

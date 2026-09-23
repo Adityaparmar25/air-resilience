@@ -175,15 +175,21 @@ class GeminiVisionAnalyzer:
             if context_description:
                 prompt_parts.append(f"\nReporter observation context: {context_description}")
 
+            config_kwargs: Dict[str, Any] = {
+                "system_instruction": GEMINI_VISION_SYSTEM_INSTRUCTION,
+                "response_mime_type": "application/json",
+                "response_schema": CitizenImageAnalysis,
+                "temperature": 0.1,
+                "tools": None,
+            }
+            # Vision analyzer only needs image -> structured schema; disable AFC
+            if hasattr(types, "AutomaticFunctionCallingConfig"):
+                config_kwargs["automatic_function_calling"] = types.AutomaticFunctionCallingConfig(disable=True)
+
             response = self._client.models.generate_content(
                 model=self.model,
                 contents=prompt_parts,
-                config=types.GenerateContentConfig(
-                    system_instruction=GEMINI_VISION_SYSTEM_INSTRUCTION,
-                    response_mime_type="application/json",
-                    response_schema=CitizenImageAnalysis,
-                    temperature=0.1,
-                ),
+                config=types.GenerateContentConfig(**config_kwargs),
             )
 
             # 4. Parse and validate through Pydantic model and security guardrails
