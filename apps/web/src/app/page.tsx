@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Header from "../components/Header";
+import CommandCenterView from "../components/CommandCenterView";
 import AnalysisCard from "../components/AnalysisCard";
 import EventDetailModal from "../components/EventDetailModal";
 import IncidentDetailModal from "../components/IncidentDetailModal";
@@ -51,7 +52,7 @@ const SAMPLE_IMAGES = [
 ];
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"citizen" | "events" | "authority" | "federation">("citizen");
+  const [activeTab, setActiveTab] = useState<"command" | "citizen" | "events" | "authority" | "federation">("command");
 
   // Form State
   const [selectedLocation, setSelectedLocation] = useState(NCR_LOCATIONS[0]);
@@ -269,6 +270,18 @@ export default function Home() {
               Dismiss
             </button>
           </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 0: GEOSPATIAL COMMAND CENTER (PRODUCTION OBSERVATIONAL RADAR) */}
+        {/* ========================================================================= */}
+        {activeTab === "command" && (
+          <CommandCenterView
+            events={events}
+            incidents={incidents}
+            onSelectEvent={(ev) => setSelectedEvent(ev)}
+            onSelectIncident={(inc) => setSelectedIncident(inc)}
+          />
         )}
 
         {/* ========================================================================= */}

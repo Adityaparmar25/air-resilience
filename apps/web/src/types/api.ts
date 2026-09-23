@@ -104,6 +104,9 @@ export interface PollutionEvent {
   human_verification_required: boolean;
   report_ids: string[];
   station_ids: string[];
+  provenance_type?: string;
+  provenance_label?: string;
+  is_replay?: boolean;
 }
 
 export type IncidentPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -120,6 +123,7 @@ export interface AuditRecord {
   audit_id: string;
   incident_id: string;
   actor: string;
+  actor_id?: string;
   action: string;
   previous_status?: IncidentStatus | null;
   new_status?: IncidentStatus | null;
@@ -148,6 +152,77 @@ export interface Incident {
   probable_source?: string | null;
   forecast: ForecastContext;
   explanation?: string | null;
+  provenance_type?: string;
+  is_replay?: boolean;
+}
+
+export interface ProviderHealthIndicator {
+  status: "available" | "unavailable" | "degraded" | "replay";
+  mode: string;
+  details: string;
+}
+
+export interface SystemHealthResponse {
+  status: "ok" | "degraded" | "unhealthy" | "unreachable";
+  service: string;
+  version: string;
+  environment: string;
+  data_mode: "HISTORICAL_REPLAY" | "LIVE";
+  timestamp: string;
+  providers: Record<string, ProviderHealthIndicator>;
+}
+
+export interface HistoricalSmogData {
+  metadata: {
+    dataset_name: string;
+    data_provenance: string;
+    provenance_type: string;
+    is_synthetic: boolean;
+    is_replay: boolean;
+    display_label: string;
+    episode_description: string;
+    time_range: { start: string; end: string };
+    sources: Array<{ provider: string; portal?: string; instrument?: string; product?: string; station?: string }>;
+  };
+  meteorology: {
+    station_id: string;
+    temperature_celsius: number;
+    relative_humidity_percent: number;
+    wind_speed_mps: number;
+    wind_direction_degrees: number;
+    wind_direction_cardinal: string;
+    atmospheric_inversion_risk: string;
+    mixing_height_meters: number;
+    ventilation_coefficient_m2_s: number;
+  };
+  satellite_troposphere: {
+    instrument: string;
+    tropospheric_no2_column_umol_m2: number;
+    absorbing_aerosol_index: number;
+    notice: string;
+  };
+  thermal_anomalies: Array<{
+    latitude: number;
+    longitude: number;
+    satellite: string;
+    instrument: string;
+    confidence: number;
+    frp: number;
+    claim_statement: string;
+  }>;
+  monitoring_observations: Array<{
+    station_id: string;
+    station_name: string;
+    latitude: number;
+    longitude: number;
+    timestamp: string;
+    pm25: number;
+    pm10: number;
+    no2: number;
+    so2: number;
+    co: number;
+    o3: number;
+  }>;
 }
 
 export type NodeStatus = "ACTIVE" | "OFFLINE" | "TRAINING" | "SYNCED" | "FAILED";

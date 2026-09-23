@@ -5,10 +5,12 @@ import {
   FederatedInferenceRequest,
   FederatedInferenceResponse,
   FederatedRound,
+  HistoricalSmogData,
   Incident,
   IncidentNote,
   ModelParams,
   PollutionEvent,
+  SystemHealthResponse,
 } from "../types/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
@@ -21,6 +23,22 @@ export async function checkApiHealth(): Promise<{ status: string; timestamp: str
   } catch {
     return { status: "unreachable", timestamp: new Date().toISOString() };
   }
+}
+
+export async function fetchSystemHealth(): Promise<SystemHealthResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/health`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch system health: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchHistoricalSmogData(): Promise<HistoricalSmogData> {
+  const res = await fetch(`${API_BASE}/api/v1/historical/delhi-smog-2023`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch historical smog data: HTTP ${res.status}`);
+  }
+  return await res.json();
 }
 
 export async function submitCitizenReport(payload: {
@@ -88,10 +106,17 @@ export async function detectPollutionEvents(payload: {
   return await res.json();
 }
 
-export async function fetchEvents(status?: string, activeOnly: boolean = false): Promise<PollutionEvent[]> {
+export async function fetchEvents(
+  status?: string,
+  activeOnly: boolean = false,
+  limit: number = 50,
+  offset: number = 0
+): Promise<PollutionEvent[]> {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
   if (activeOnly) params.set("active_only", "true");
+  if (limit) params.set("limit", limit.toString());
+  if (offset) params.set("offset", offset.toString());
 
   const query = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(`${API_BASE}/api/v1/events${query}`, {
@@ -145,10 +170,17 @@ export async function createIncident(payload: {
   return await res.json();
 }
 
-export async function fetchIncidents(status?: string, priority?: string): Promise<Incident[]> {
+export async function fetchIncidents(
+  status?: string,
+  priority?: string,
+  limit: number = 50,
+  offset: number = 0
+): Promise<Incident[]> {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
   if (priority) params.set("priority", priority);
+  if (limit) params.set("limit", limit.toString());
+  if (offset) params.set("offset", offset.toString());
 
   const query = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(`${API_BASE}/api/v1/incidents${query}`, {
