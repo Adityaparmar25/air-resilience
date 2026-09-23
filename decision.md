@@ -322,3 +322,43 @@ Before automatically creating an operational alert or escalating an event/incide
 
 Existing fusion weights from D-006 are strictly preserved. Evidence signals that are unavailable remain `None` and are excluded from the normalization denominator (per D-007).
 
+---
+
+## D-018 — Data-Local Training with Federated Model-Update Aggregation
+
+### Decision
+
+Implement cross-city knowledge sharing as **data-local training with federated model-update aggregation** across regional city nodes (Delhi, Haryana, Uttar Pradesh).
+
+1. **Zero Raw Training Observation Leakage**:
+   Raw time-series observations, ground sensor records, and citizen reports remain strictly confined to the local node's data partition during training. Under no circumstances are raw training rows transmitted to the federation coordinator.
+2. **Dedicated Federated Pollution-Risk Model**:
+   TimesFM remains the managed univariate time-series forecast engine and is not federated. Instead, a lightweight, transparent risk model trained on multidimensional features (`pm25`, `pm10`, `no2`, `temperature`, `humidity`, `wind_speed`, `wind_direction`, `hour`, `day_of_week`) predicts next-hour pollution risk elevation.
+3. **Sample-Weighted FedAvg Aggregation**:
+   The central coordinator aggregates participating node parameter updates using transparent sample-count weighting:
+   $$W_{global} = \sum_{k} \frac{n_k}{N} W_k, \quad b_{global} = \sum_{k} \frac{n_k}{N} b_k$$
+   where $n_k$ is the local sample count of node $k$ and $N = \sum_k n_k$.
+4. **Prototype Transparency Boundary**:
+   The prototype is explicitly characterized as data-local training with federated model-update aggregation. It does NOT claim formal differential privacy, cryptographic secure multiparty aggregation, or production government federation.
+
+---
+
+## D-019 — Canonical City Node Contract & Interoperability
+
+### Decision
+
+City nodes participate in the federated network through a canonical interoperability contract:
+
+```json
+{
+  "node_id": "delhi",
+  "schema_version": "1.0",
+  "supported_signals": ["pm25", "pm10", "no2", "weather"],
+  "model_version": "v1"
+}
+```
+
+### Reason
+
+The platform core and event engine must remain city-agnostic and free from hardcoded municipal business logic. New urban centers, industrial clusters, and state pollution control boards can be added via declarative node registration and standard data contracts without altering engine code.
+
