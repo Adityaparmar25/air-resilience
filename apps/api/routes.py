@@ -31,7 +31,19 @@ from schemas.incident import (
     InvestigateIncidentRequest,
     ResolveIncidentRequest,
 )
+from schemas.federation import (
+    AggregateRoundRequest,
+    CityNode,
+    CreateRoundRequest,
+    FederatedInferenceRequest,
+    FederatedInferenceResponse,
+    FederatedRound,
+    ModelParams,
+    RegisterNodeRequest,
+    TrainRoundRequest,
+)
 from schemas.report import CitizenReport, ReportResponse, ReportSubmissionRequest
+from services.federation.coordinator import get_federation_coordinator
 from services.ai.gemini_service import GeminiVisionAnalyzer
 from services.anomaly.detector import (
     AnomalyDetectionConfig,
@@ -815,4 +827,157 @@ def get_incident_audit_log(incident_id: str) -> List[AuditRecord]:
 def get_connectivity_status() -> Dict[str, Any]:
     """Inspect environment variables and cloud services connectivity status."""
     return check_google_cloud_connectivity()
+
+
+# =============================================================================
+# FEDERATED MULTI-CITY LEARNING APIS
+# =============================================================================
+
+@router.post(
+    "/api/v1/federation/nodes",
+    response_model=CityNode,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Federation Network"],
+    summary="Register or update a participating city node",
+)
+def register_federation_node(
+    request: RegisterNodeRequest,
+    _role: str = Depends(require_authority_role(["AUTHORITY", "ADMIN", "DISPATCHER"])),
+) -> CityNode:
+    """Register a new city/jurisdiction node adhering to the canonical capability contract."""
+    coord = get_federation_coordinator()
+    return coord.register_node(request)
+
+
+@router.get(
+    "/api/v1/federation/nodes",
+    response_model=List[CityNode],
+    tags=["Federation Network"],
+    summary="List registered city nodes and deployment capabilities",
+)
+def list_federation_nodes() -> List[CityNode]:
+    """Retrieve all city nodes in the federated network."""
+    coord = get_federation_coordinator()
+    return coord.list_nodes()
+
+
+@router.post(
+    "/api/v1/federation/rounds",
+    response_model=FederatedRound,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Federation Network"],
+    summary="Create a new federated training round across nodes",
+)
+def create_federation_round(
+    request: Optional[CreateRoundRequest] = None,
+    _role: str = Depends(require_authority_role(["AUTHORITY", "ADMIN", "DISPATCHER"])),
+) -> FederatedRound:
+    """Initialize a federation round for participating city nodes."""
+    coord = get_federation_coordinator()
+    req = request or CreateRoundRequest()
+    try:
+        return coord.create_round(
+            participating_nodes=req.participating_nodes,
+            base_model_version=req.base_model_version,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/api/v1/federation/rounds",
+    response_model=List[FederatedRound],
+    tags=["Federation Network"],
+    summary="List all federated training and aggregation rounds",
+)
+def list_federation_rounds() -> List[FederatedRound]:
+    """Retrieve history of all federated rounds."""
+    coord = get_federation_coordinator()
+    return coord.list_rounds()
+
+
+@router.get(
+    "/api/v1/federation/rounds/{round_id}",
+    response_model=FederatedRound,
+    tags=["Federation Network"],
+    summary="Retrieve details of a specific federation round",
+)
+def get_federation_round(round_id: str) -> FederatedRound:
+    """Get federation round status, node updates, and training metrics."""
+    coord = get_federation_coordinator()
+    round_obj = coord.get_round(round_id)
+    if not round_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Federated round '{round_id}' not found",
+        )
+    return round_obj
+
+
+@router.post(
+    "/api/v1/federation/rounds/{round_id}/train",
+    response_model=FederatedRound,
+    tags=["Federation Network"],
+    summary="Trigger data-local training on participating node partitions",
+)
+def train_federation_round(
+    round_id: str,
+    request: Optional[TrainRoundRequest] = None,
+    _role: str = Depends(require_authority_role(["AUTHORITY", "ADMIN", "DISPATCHER"])),
+) -> FederatedRound:
+    """Execute data-local training. Zero raw training records cross the coordinator boundary."""
+    coord = get_federation_coordinator()
+    req = request or TrainRoundRequest()
+    try:
+        return coord.train_round(round_id, epochs=req.epochs, lr=req.learning_rate)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Federated round '{round_id}' not found")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/api/v1/federation/rounds/{round_id}/aggregate",
+    response_model=FederatedRound,
+    tags=["Federation Network"],
+    summary="Perform sample-weighted FedAvg aggregation into new global model",
+)
+def aggregate_federation_round(
+    round_id: str,
+    request: Optional[AggregateRoundRequest] = None,
+    _role: str = Depends(require_authority_role(["AUTHORITY", "ADMIN", "DISPATCHER"])),
+) -> FederatedRound:
+    """Aggregate model updates using sample counts into updated global model vN+1."""
+    coord = get_federation_coordinator()
+    req = request or AggregateRoundRequest()
+    try:
+        return coord.aggregate_round(round_id, min_required_nodes=req.min_required_nodes)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Federated round '{round_id}' not found")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/api/v1/federation/models/current",
+    response_model=ModelParams,
+    tags=["Federation Network"],
+    summary="Retrieve current active global federated model parameters",
+)
+def get_current_federated_model() -> ModelParams:
+    """Retrieve weights, bias, and version of current global federated risk model."""
+    coord = get_federation_coordinator()
+    return coord.get_global_model().get_params()
+
+
+@router.post(
+    "/api/v1/federation/infer",
+    response_model=FederatedInferenceResponse,
+    tags=["Federation Network"],
+    summary="Evaluate next-hour pollution risk using federated model",
+)
+def federated_inference(request: FederatedInferenceRequest) -> FederatedInferenceResponse:
+    """Run inference against federated global model or node-specific model."""
+    coord = get_federation_coordinator()
+    return coord.infer(request)
 
