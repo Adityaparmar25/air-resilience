@@ -102,14 +102,15 @@ class OperationalStore:
         self,
         status: Optional[EventStatus] = None,
         limit: int = 50,
+        offset: int = 0,
     ) -> List[PollutionEvent]:
-        """List events sorted by timestamp descending, optionally filtered by status."""
+        """List events sorted by timestamp descending, optionally filtered by status and paginated."""
         with self._lock:
             events = list(self._events.values())
             if status:
                 events = [e for e in events if e.evidence_status == status or e.status == status]
             events.sort(key=lambda e: e.timestamp, reverse=True)
-            return events[:limit]
+            return events[offset : offset + limit]
 
     # --- Incidents & Lifecycle Transitions ---
 
@@ -435,8 +436,9 @@ class OperationalStore:
         status: Optional[IncidentStatus] = None,
         priority: Optional[IncidentPriority] = None,
         limit: int = 50,
+        offset: int = 0,
     ) -> List[Incident]:
-        """List incidents sorted by creation time descending."""
+        """List incidents sorted by creation time descending and paginated."""
         with self._lock:
             incidents = list(self._incidents.values())
             if status:
@@ -444,7 +446,7 @@ class OperationalStore:
             if priority:
                 incidents = [i for i in incidents if i.priority == priority]
             incidents.sort(key=lambda i: i.created_at, reverse=True)
-            return incidents[:limit]
+            return incidents[offset : offset + limit]
 
     def get_audit_records(self, incident_id: Optional[str] = None) -> List[AuditRecord]:
         """Retrieve immutable audit records."""

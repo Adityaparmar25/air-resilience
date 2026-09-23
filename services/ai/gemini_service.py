@@ -153,7 +153,7 @@ class GeminiVisionAnalyzer:
                 prompt_parts.append(f"\nReporter observation context: {context_description}")
 
             response = self._client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-1.5-flash",
                 contents=prompt_parts,
                 config=types.GenerateContentConfig(
                     system_instruction=GEMINI_VISION_SYSTEM_INSTRUCTION,
