@@ -56,12 +56,18 @@ from services.forecasting.base import (
     ForecastResponse,
 )
 from services.forecasting.baseline import BaselineTimeSeriesForecastProvider
+from services.forecasting.bigquery_timesfm import (
+    BigQueryTimesFMForecastProvider,
+    get_forecast_provider,
+)
 from services.forecasting.time_series_service import TimeSeriesService
 from services.fusion.correlation import SpatioTemporalCorrelationService
 from services.fusion.engine import EvidenceFusionEngine
 from services.ingestion.cpcb_adapter import CPCBAdapter
 from services.ingestion.quality_pipeline import DataQualityPipeline
 from services.operational.store import get_operational_store
+from services.auth.firebase_auth import require_role, UserIdentity
+from services.storage.image_storage import get_image_storage_provider
 
 router = APIRouter()
 
@@ -102,15 +108,27 @@ def compute_provider_health() -> Dict[str, Dict[str, Any]]:
         sentinel_status = "replay"
         sentinel_details = "Sentinel-5P Level-3 tropospheric NO2 column density archive"
 
-    # 5. Gemini
+    # 5. Gemini / Vertex AI
+    vertex_enabled = bool(getattr(settings, "VERTEX_AI_ENABLED", False))
+    gcp_project = getattr(settings, "GOOGLE_CLOUD_PROJECT", None) or os.getenv("GOOGLE_CLOUD_PROJECT")
     gemini_key = settings.GEMINI_API_KEY
     gemini_model = getattr(settings, "GEMINI_MODEL", "gemini-3.5-flash-lite")
-    if gemini_key and len(gemini_key) > 5 and not gemini_key.startswith("your_"):
+
+    if vertex_enabled and gcp_project:
         gemini_status = "available"
-        gemini_details = f"Google Gemini multimodal vision model active ({gemini_model})"
+        gemini_provider = "vertex-ai"
+        gemini_mode = "live"
+        gemini_details = f"Google Vertex AI multimodal inference active ({gemini_model})"
+    elif gemini_key and len(gemini_key) > 5 and not gemini_key.startswith("your_"):
+        gemini_status = "available"
+        gemini_provider = "google-genai"
+        gemini_mode = "live"
+        gemini_details = f"Google GenAI SDK direct API key active ({gemini_model})"
     else:
         gemini_status = "unavailable"
-        gemini_details = f"GEMINI_API_KEY unconfigured; offline visual classifier fallback ({gemini_model})"
+        gemini_provider = "fixture"
+        gemini_mode = "offline"
+        gemini_details = f"GEMINI credentials unconfigured; offline visual classifier fallback ({gemini_model})"
 
     # 6. Forecast
     forecast_provider = getattr(settings, "FORECAST_PROVIDER", "DEVELOPMENT")
@@ -118,7 +136,7 @@ def compute_provider_health() -> Dict[str, Dict[str, Any]]:
         bq = BigQueryTimesFMForecastProvider()
         if bq.is_gcp_configured():
             forecast_status = "available"
-            forecast_details = "Google Cloud BigQuery ML / TimesFM live forecasting"
+            forecast_details = "Google Cloud BigQuery ML / TimesFM live forecasting (ADC connected)"
         else:
             forecast_status = "degraded"
             forecast_details = "BigQuery TimesFM benchmark mode (calibrated: MAE 8.42, RMSE 11.25)"
@@ -147,8 +165,8 @@ def compute_provider_health() -> Dict[str, Dict[str, Any]]:
         "sentinel": {"status": sentinel_status, "mode": "replay" if sentinel_status == "replay" else "live", "details": sentinel_details},
         "gemini": {
             "status": gemini_status,
-            "mode": "live" if gemini_status == "available" else "offline",
-            "provider": "google-genai" if gemini_status == "available" else "fixture",
+            "mode": gemini_mode,
+            "provider": gemini_provider,
             "model": gemini_model,
             "details": gemini_details,
         },
@@ -323,8 +341,8 @@ def detect_anomaly(request: AnomalyRequest) -> AnomalyResponse:
     },
 )
 def generate_forecast(request: ForecastRequest) -> ForecastResponse:
-    """Produce PM2.5 horizon forecast using the forecast provider abstraction."""
-    provider = BaselineTimeSeriesForecastProvider()
+    """Produce PM2.5 horizon forecast using the configured forecast provider factory."""
+    provider = get_forecast_provider()
     try:
         response = provider.forecast(request)
     except ValueError as e:
@@ -390,9 +408,12 @@ async def submit_citizen_report(
                         detail="Image payload exceeds 10MB limit",
                     )
                 report_file_name = f"report_json_{int(obs_timestamp.timestamp())}.jpg"
-                saved_image_path = str(UPLOADS_DIR / report_file_name)
-                with open(saved_image_path, "wb") as f:
-                    f.write(image_data)
+                storage_provider = get_image_storage_provider()
+                saved_image_path, _ = storage_provider.store_image(
+                    image_bytes=image_data,
+                    mime_type="image/jpeg",
+                    filename=report_file_name,
+                )
                 has_image = True
 
         except Exception as e:
@@ -427,9 +448,12 @@ async def submit_citizen_report(
                 )
 
             safe_filename = f"report_{int(obs_timestamp.timestamp())}_{file.filename}"
-            saved_image_path = str(UPLOADS_DIR / safe_filename)
-            with open(saved_image_path, "wb") as f:
-                f.write(contents)
+            storage_provider = get_image_storage_provider()
+            saved_image_path, _ = storage_provider.store_image(
+                image_bytes=contents,
+                mime_type=file.content_type or "image/jpeg",
+                filename=safe_filename,
+            )
             has_image = True
 
     report = CitizenReport(
@@ -482,19 +506,26 @@ def analyze_citizen_report(report_id: str) -> ReportResponse:
             detail=f"Report '{report_id}' has no photograph attached to analyze",
         )
 
-    image_file = Path(report.image_path)
-    if not image_file.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Associated image file not found on disk: {report.image_path}",
-        )
-
     analyzer = GeminiVisionAnalyzer()
     try:
-        analysis = analyzer.analyze_image(
-            image_data=image_file,
-            filename=image_file.name,
-            context_description=report.description,
+        if report.image_path.startswith("gs://"):
+            analysis = analyzer.analyze_image(
+                image_data=report.image_path,
+                filename=report.image_path.split("/")[-1],
+                context_description=report.description,
+            )
+        else:
+            storage_provider = get_image_storage_provider()
+            raw_bytes = storage_provider.retrieve_image(report.image_path)
+            analysis = analyzer.analyze_image(
+                image_data=raw_bytes,
+                filename=Path(report.image_path).name,
+                context_description=report.description,
+            )
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Associated image file not found in storage: {report.image_path}",
         )
     except Exception as e:
         raise HTTPException(
@@ -557,10 +588,18 @@ def detect_and_fuse_event(request: DetectEventRequest) -> PollutionEvent:
             citizen_analysis = report.analysis
         elif report.has_image and report.image_path:
             analyzer = GeminiVisionAnalyzer()
-            citizen_analysis = analyzer.analyze_image(
-                image_data=Path(report.image_path),
-                context_description=report.description,
-            )
+            if report.image_path.startswith("gs://"):
+                citizen_analysis = analyzer.analyze_image(
+                    image_data=report.image_path,
+                    context_description=report.description,
+                )
+            else:
+                storage_provider = get_image_storage_provider()
+                raw_bytes = storage_provider.retrieve_image(report.image_path)
+                citizen_analysis = analyzer.analyze_image(
+                    image_data=raw_bytes,
+                    context_description=report.description,
+                )
             report.analysis = citizen_analysis
             report.status = "ANALYZED"
             store.save_report(report)
@@ -706,25 +745,12 @@ def api_health_check() -> HealthResponse:
 def require_authority_role(
     allowed_roles: Optional[List[str]] = None,
 ):
-    """Server-side authorization check for authority workflows (security.md Section 6 & 7).
+    """Server-side authorization check enforcing Firebase ID tokens and RBAC (security.md Section 6 & 7).
 
-    Validates that client possesses required role (e.g. AUTHORITY, ADMIN, DISPATCHER, FIELD_OPERATOR).
-    Rejects unauthorized roles (e.g. CITIZEN) with HTTP 403 Forbidden.
+    Validates cryptographically verified Firebase ID token and matches against
+    authorized server-side roles in the operational store. Never trusts unverified client headers in production.
     """
-    valid_roles = [r.upper() for r in (allowed_roles or ["AUTHORITY", "ADMIN", "DISPATCHER", "FIELD_OPERATOR"])]
-
-    def role_dependency(
-        x_user_role: Optional[str] = Header(default="AUTHORITY", alias="X-User-Role"),
-    ) -> str:
-        role = (x_user_role or "AUTHORITY").strip().upper()
-        if role not in valid_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Unauthorized: Role '{role}' cannot perform this authority action. Allowed roles: {valid_roles}",
-            )
-        return role
-
-    return role_dependency
+    return require_role(allowed_roles)
 
 
 @router.post(
