@@ -1,14 +1,3 @@
-"""BigQuery ML / TimesFM Forecast Provider.
-
-Provides the production GCP interface for BigQuery ML AI.FORECAST / TimesFM (Decision D-008 & D-021).
-Supports clean provider selection:
-- DEVELOPMENT: Local diurnal baseline
-- BIGQUERY_TIMESFM: Google Cloud BigQuery ML TimesFM
-
-Records provider_name in output and attaches verified measured evaluation metrics.
-Never invents forecast accuracy numbers.
-"""
-
 from datetime import datetime, timezone
 import os
 from pathlib import Path
@@ -47,14 +36,22 @@ class BigQueryTimesFMForecastProvider(ForecastProvider):
         self._baseline_provider = BaselineTimeSeriesForecastProvider()
 
     def is_gcp_configured(self) -> bool:
-        """Check whether minimum GCP credentials file and dataset exist."""
+        """Check whether minimum GCP credentials (ADC or local file) and dataset exist."""
+        if not self.settings.GOOGLE_CLOUD_PROJECT or not self.settings.BIGQUERY_DATASET:
+            return False
+
+        # 1. Local explicit credentials JSON (if configured)
         creds_path = self.settings.GOOGLE_APPLICATION_CREDENTIALS
-        has_real_creds = bool(creds_path and Path(creds_path).exists())
-        return bool(
-            self.settings.GOOGLE_CLOUD_PROJECT
-            and has_real_creds
-            and self.settings.BIGQUERY_DATASET
-        )
+        if creds_path and Path(creds_path).exists():
+            return True
+
+        # 2. Google Cloud Application Default Credentials (ADC) for Cloud Run runtime service account
+        try:
+            import google.auth
+            _, project = google.auth.default()
+            return True
+        except Exception:
+            return False
 
     def build_timesfm_query(self, station_id: str, horizon: int) -> str:
         """Construct the canonical BigQuery ML.FORECAST query for TimesFM."""
@@ -78,21 +75,24 @@ ORDER BY forecast_timestamp ASC;
         """Generate forecast using BigQuery ML / TimesFM or calibrated benchmark fallback."""
         if not self.is_gcp_configured():
             if self.fallback_to_baseline:
-                # Use calibrated diurnal baseline calculations but clearly preserve TimesFM metadata
+                # Use calibrated diurnal baseline calculations; clearly indicate fallback
                 resp = self._baseline_provider.forecast(request)
                 return ForecastResponse(
                     station_id=resp.station_id,
                     horizon=resp.horizon,
                     predictions=resp.predictions,
                     provider_type="bigquery_timesfm_fallback_to_baseline",
+                    provider_name="BigQuery TimesFM Calibrated Baseline (Fallback Active)",
+                    provider_status="degraded",
+                    fallback_active=True,
                     measured_metrics=TIMESFM_MEASURED_BENCHMARK_METRICS,
                 )
             raise RuntimeError(
                 "BigQuery ML / TimesFM provider unavailable: "
-                "GOOGLE_CLOUD_PROJECT, GOOGLE_APPLICATION_CREDENTIALS, and BIGQUERY_DATASET must be set."
+                "GOOGLE_CLOUD_PROJECT and BIGQUERY_DATASET must be set with valid ADC credentials."
             )
 
-        # In production GCP environment with authenticated BigQuery client:
+        # In production GCP environment with authenticated BigQuery client via ADC:
         try:
             from google.cloud import bigquery  # type: ignore
 
@@ -118,6 +118,9 @@ ORDER BY forecast_timestamp ASC;
                 horizon=request.horizon,
                 predictions=predictions,
                 provider_type="bigquery_timesfm_live",
+                provider_name="Google Cloud BigQuery ML TimesFM",
+                provider_status="available",
+                fallback_active=False,
                 measured_metrics=TIMESFM_MEASURED_BENCHMARK_METRICS,
             )
         except Exception:
@@ -129,6 +132,9 @@ ORDER BY forecast_timestamp ASC;
                     horizon=resp.horizon,
                     predictions=resp.predictions,
                     provider_type="bigquery_timesfm_fallback_to_baseline",
+                    provider_name="BigQuery TimesFM Calibrated Baseline (Fallback Active)",
+                    provider_status="degraded",
+                    fallback_active=True,
                     measured_metrics=TIMESFM_MEASURED_BENCHMARK_METRICS,
                 )
             raise

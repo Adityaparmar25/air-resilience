@@ -109,4 +109,7 @@ class BaselineTimeSeriesForecastProvider(ForecastProvider):
             horizon=request.horizon,
             predictions=predictions,
             provider_type="development_baseline",
+            provider_name="Development Local Diurnal Baseline",
+            provider_status="available",
+            fallback_active=False,
         )

@@ -18,8 +18,8 @@ class PredictionPoint(BaseModel):
 
     timestamp: datetime = Field(..., description="Forecast target timestamp (UTC)")
     pm25_forecast: float = Field(..., ge=0.0, description="Predicted PM2.5 concentration (ug/m3)")
-    lower_bound: float = Field(..., ge=0.0, description="Lower prediction bound (e.g. 95% CI)")
-    upper_bound: float = Field(..., ge=0.0, description="Upper prediction bound (e.g. 95% CI)")
+    lower_bound: float = Field(..., ge=0.0, description="Lower prediction bound (95% prediction interval)")
+    upper_bound: float = Field(..., ge=0.0, description="Upper prediction bound (95% prediction interval)")
 
     @model_validator(mode="after")
     def validate_bounds(self) -> "PredictionPoint":
@@ -48,14 +48,26 @@ class ForecastRequest(BaseModel):
 
 
 class ForecastResponse(BaseModel):
-    """Forecast response adhering strictly to Phase 3A specification."""
+    """Forecast response adhering strictly to platform specifications."""
 
     station_id: str
     horizon: int
     predictions: List[PredictionPoint]
     provider_type: str = Field(
         default="development_baseline",
-        description="Identifies provider: 'development_baseline' | 'bigquery_timesfm'",
+        description="Identifies provider type code",
+    )
+    provider_name: str = Field(
+        default="Development Local Diurnal Baseline",
+        description="Human-readable provider identifier",
+    )
+    provider_status: str = Field(
+        default="available",
+        description="Current operational status: 'available' | 'degraded' | 'unavailable'",
+    )
+    fallback_active: bool = Field(
+        default=False,
+        description="Whether fallback to baseline calculation was activated",
     )
     measured_metrics: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -63,11 +75,14 @@ class ForecastResponse(BaseModel):
     )
 
     def to_contract_dict(self) -> Dict[str, Any]:
-        """Produce the exact dictionary required by Phase 3A specification."""
+        """Produce the contract dictionary representation."""
         res: Dict[str, Any] = {
             "station_id": self.station_id,
             "horizon": self.horizon,
             "provider_type": self.provider_type,
+            "provider_name": self.provider_name,
+            "provider_status": self.provider_status,
+            "fallback_active": self.fallback_active,
             "predictions": [
                 {
                     "timestamp": p.timestamp.isoformat(),
