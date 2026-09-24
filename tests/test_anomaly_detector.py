@@ -81,17 +81,32 @@ def test_anomaly_classification_strong_anomaly():
 
 
 def test_contract_dict_exact_keys():
-    """Verify output dictionary matches the exact Phase 3A contract keys."""
+    """Verify output dictionary contains contract keys and separated anomaly output fields."""
     detector = ExplainableAnomalyDetector()
     base_time = datetime(2026, 1, 15, 10, 0, tzinfo=timezone.utc)
     target = _make_obs(base_time, 180.0)
     result = detector.detect(target, [])
 
     d = result.to_contract_dict()
-    expected_keys = {"station_id", "timestamp", "pm25", "expected_pm25", "anomaly_score", "status"}
+    expected_keys = {
+        "station_id",
+        "timestamp",
+        "pm25",
+        "expected_pm25",
+        "anomaly_score",
+        "status",
+        "z_score",
+        "absolute_threshold_triggered",
+        "classification_reason",
+        "classification",
+    }
     assert set(d.keys()) == expected_keys
     assert d["status"] in {"NORMAL", "ELEVATED", "STRONG_ANOMALY"}
     assert isinstance(d["anomaly_score"], (int, float))
+    assert isinstance(d["z_score"], float)
+    assert isinstance(d["absolute_threshold_triggered"], bool)
+    assert isinstance(d["classification_reason"], str)
+    assert d["classification"] == d["status"]
 
 
 def test_missing_pm25_raises_error():

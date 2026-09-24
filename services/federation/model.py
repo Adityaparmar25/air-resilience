@@ -38,6 +38,26 @@ FEATURE_NAMES = [
 ]
 
 
+def compute_risk_category(score: float) -> str:
+    """Standardized risk level mapping across all services:
+    0.0 <= score < 25.0: "LOW"
+    25.0 <= score < 50.0: "MODERATE"
+    50.0 <= score < 75.0: "HIGH"
+    75.0 <= score <= 100.0: "CRITICAL"
+    """
+    # If passed as 0.0 to 1.0 ratio, convert to 0-100 percentage
+    val = score * 100.0 if (0.0 < score <= 1.0) else score
+
+    if val < 25.0:
+        return "LOW"
+    elif val < 50.0:
+        return "MODERATE"
+    elif val < 75.0:
+        return "HIGH"
+    else:
+        return "CRITICAL"
+
+
 class FederatedPollutionRiskModel:
     """Lightweight trainable model for local node training and server-side FedAvg."""
 
@@ -117,15 +137,7 @@ class FederatedPollutionRiskModel:
 
         # Risk Index (0.0 to 1.0) scaled against severe threshold (250 ug/m3)
         risk_index = min(1.0, max(0.0, round(pred_pm25 / 250.0, 3)))
-
-        if pred_pm25 < 60.0:
-            risk_level = "LOW"
-        elif pred_pm25 < 120.0:
-            risk_level = "MODERATE"
-        elif pred_pm25 < 250.0:
-            risk_level = "HIGH"
-        else:
-            risk_level = "CRITICAL"
+        risk_level = compute_risk_category(risk_index * 100.0)
 
         return pred_pm25, risk_index, risk_level
 

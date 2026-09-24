@@ -64,6 +64,22 @@ class AnomalyResult(BaseModel):
     expected_pm25: float
     anomaly_score: float
     status: AnomalyStatus
+    z_score: float = Field(
+        default=0.0,
+        description="Statistical standard score relative to historical baseline mean and std",
+    )
+    absolute_threshold_triggered: bool = Field(
+        default=False,
+        description="Whether PM2.5 concentration crossed the absolute regulatory or critical ceiling",
+    )
+    classification_reason: str = Field(
+        default="",
+        description="Transparent explanation of why this specific classification was determined",
+    )
+    classification: str = Field(
+        default="NORMAL",
+        description="Classification string mirroring status (NORMAL, ELEVATED, STRONG_ANOMALY)",
+    )
     explanation: Optional[str] = Field(
         default=None,
         description="Human-readable transparent explanation of how anomaly score and status were determined",
@@ -78,7 +94,7 @@ class AnomalyResult(BaseModel):
     )
 
     def to_contract_dict(self) -> Dict[str, Any]:
-        """Produce the exact dictionary required by Phase 3A specification."""
+        """Produce the exact dictionary preserving contract and separated anomaly fields."""
         return {
             "station_id": self.station_id,
             "timestamp": self.timestamp.isoformat(),
@@ -86,6 +102,10 @@ class AnomalyResult(BaseModel):
             "expected_pm25": self.expected_pm25,
             "anomaly_score": self.anomaly_score,
             "status": self.status.value,
+            "z_score": self.z_score,
+            "absolute_threshold_triggered": self.absolute_threshold_triggered,
+            "classification_reason": self.classification_reason,
+            "classification": self.classification,
         }
 
 
@@ -171,6 +191,12 @@ class ExplainableAnomalyDetector:
             f"Classified as {status.value}: {'; '.join(status_reasons)}."
         )
 
+        absolute_triggered = bool(
+            pm25_val >= self.config.absolute_elevated_ceiling
+            or pm25_val >= self.config.absolute_strong_ceiling
+        )
+        classification_reason = "; ".join(status_reasons)
+
         return AnomalyResult(
             station_id=observation.station_id,
             timestamp=observation.timestamp,
@@ -178,6 +204,10 @@ class ExplainableAnomalyDetector:
             expected_pm25=round(expected_pm25, 2),
             anomaly_score=anomaly_score,
             status=status,
+            z_score=round(z_score, 2),
+            absolute_threshold_triggered=absolute_triggered,
+            classification_reason=classification_reason,
+            classification=status.value,
             explanation=explanation,
             baseline_std=round(std_pm25, 2),
             thresholds_applied={

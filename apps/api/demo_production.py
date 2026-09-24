@@ -278,7 +278,8 @@ def run_production_demo() -> None:
             wind_speed=meteo["wind_speed_mps"],
         )
     )
-    print(f" -> Multi-City Risk Score: {infer_res.predicted_risk_index:.1f} / 100 [{infer_res.risk_level}]")
+    risk_score = round(infer_res.predicted_risk_index * 100.0, 1)
+    print(f" -> Multi-City Risk Score: {risk_score:.1f} / 100 [{infer_res.risk_level}]")
 
     # -------------------------------------------------------------------------
     # STEP 10: Provenance & Boundary Verification
