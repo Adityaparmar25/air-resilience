@@ -13,7 +13,31 @@ import {
   SystemHealthResponse,
 } from "../types/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+export function getApiUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  const isProd = process.env.NODE_ENV === "production";
+
+  if (isProd) {
+    if (!envUrl || envUrl.includes("localhost") || envUrl.includes("127.0.0.1")) {
+      throw new Error(
+        "Production Configuration Error: NEXT_PUBLIC_API_URL is missing or points to localhost in production build. Configure the backend Cloud Run service URL."
+      );
+    }
+    return envUrl.replace(/\/+$/, "");
+  }
+
+  return (envUrl || "http://127.0.0.1:8000").replace(/\/+$/, "");
+}
+
+const getBaseUrl = (): string => {
+  try {
+    return getApiUrl();
+  } catch (e) {
+    return process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  }
+};
+
+const API_BASE = getBaseUrl();
 
 export async function checkApiHealth(): Promise<{ status: string; timestamp: string }> {
   try {

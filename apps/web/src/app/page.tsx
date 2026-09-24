@@ -14,6 +14,7 @@ import {
   fetchIncidents,
   submitCitizenReport,
   analyzeCitizenReport,
+  getApiUrl,
 } from "../lib/api";
 import {
   CitizenReport,
@@ -76,12 +77,13 @@ export default function Home() {
   const [selectedEvent, setSelectedEvent] = useState<PollutionEvent | null>(null);
   const [isDetectingEvents, setIsDetectingEvents] = useState(false);
 
-  // Incidents State (Phase 3C Authority Workflow)
+  // Incidents State (Authority Workflow)
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [incidentStatusFilter, setIncidentStatusFilter] = useState<string>("ALL");
   const [incidentPriorityFilter, setIncidentPriorityFilter] = useState<string>("ALL");
   const [isEscalating, setIsEscalating] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   // Load events & incidents
   const loadData = async () => {
@@ -98,6 +100,11 @@ export default function Home() {
   };
 
   useEffect(() => {
+    try {
+      getApiUrl();
+    } catch (err: unknown) {
+      setConfigError(err instanceof Error ? err.message : String(err));
+    }
     loadData();
     const interval = setInterval(loadData, 6000);
     return () => clearInterval(interval);
@@ -244,6 +251,21 @@ export default function Home() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+        {/* Production Configuration Warning Banner */}
+        {configError && (
+          <div className="bg-amber-950/80 border border-amber-600/70 text-amber-200 px-5 py-4 rounded-xl flex items-start justify-between text-sm shadow-lg">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <p className="font-semibold text-amber-300">Production Backend Configuration Warning</p>
+                <p className="text-xs text-amber-200/80 mt-1">{configError}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Error Notification */}
         {errorMessage && (
           <div className="bg-rose-950/70 border border-rose-800 text-rose-200 px-4 py-3 rounded-xl flex items-center justify-between text-xs">
