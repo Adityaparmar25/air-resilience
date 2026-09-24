@@ -98,22 +98,50 @@ class GeminiVisionAnalyzer:
         self,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
+        vertexai_enabled: Optional[bool] = None,
+        project: Optional[str] = None,
+        location: Optional[str] = None,
         force_fixture: bool = False,
     ):
         self.settings = get_settings()
+        self.vertexai_enabled = (
+            vertexai_enabled
+            if vertexai_enabled is not None
+            else getattr(self.settings, "VERTEX_AI_ENABLED", False)
+        )
+        self.project = project or self.settings.GOOGLE_CLOUD_PROJECT
+        self.location = location or getattr(self.settings, "GOOGLE_CLOUD_LOCATION", "global")
         self.api_key = api_key or self.settings.GEMINI_API_KEY
         self.model = model or getattr(self.settings, "GEMINI_MODEL", "gemini-3.5-flash-lite")
         self.force_fixture = force_fixture
         self._client = None
+        self._is_vertex_ai = False
 
-        if not self.force_fixture and self.api_key:
+        if not self.force_fixture:
             try:
                 from google import genai
-                self._client = genai.Client(api_key=self.api_key)
+
+                if self.vertexai_enabled and self.project:
+                    # Production Vertex AI client using Application Default Credentials (ADC)
+                    self._client = genai.Client(
+                        vertexai=True,
+                        project=self.project,
+                        location=self.location,
+                    )
+                    self._is_vertex_ai = True
+                    logger.info(
+                        f"Initialized Vertex AI Gemini Client: project={self.project}, "
+                        f"location={self.location}, model={self.model}"
+                    )
+                elif self.api_key:
+                    # Direct API-key client for local development only
+                    self._client = genai.Client(api_key=self.api_key)
+                    self._is_vertex_ai = False
+                    logger.info(f"Initialized Direct Gemini Developer Client: model={self.model}")
             except ImportError:
                 logger.warning("google-genai SDK not installed; falling back to fixture analyzer.")
             except Exception as e:
-                logger.warning(f"Failed to initialize Google GenAI Client: {e}; using fixture analyzer.")
+                logger.warning(f"Failed to initialize Google GenAI/Vertex AI Client: {e}; using fixture analyzer.")
 
     @property
     def configured_model(self) -> str:
@@ -121,15 +149,25 @@ class GeminiVisionAnalyzer:
         return self.model
 
     @property
+    def is_vertex_ai(self) -> bool:
+        """Return whether client is running on Google Cloud Vertex AI with ADC."""
+        return self._is_vertex_ai
+
+    @property
     def provider_name(self) -> str:
-        """Return the active provider descriptor."""
+        """Return the active provider descriptor.
+
+        Strict rule: Never calls a direct google-genai API-key client 'Vertex AI'.
+        """
         if self._client is not None and not self.force_fixture:
+            if self._is_vertex_ai:
+                return f"vertex-ai:{self.model}"
             return f"google-genai:{self.model}"
         return f"fixture:{self.model}"
 
     @property
     def is_live(self) -> bool:
-        """Return whether analyzer is operating with a live Google GenAI client."""
+        """Return whether analyzer is operating with a live Google GenAI/Vertex AI client."""
         return self._client is not None and not self.force_fixture
 
     def analyze_image(
@@ -140,7 +178,11 @@ class GeminiVisionAnalyzer:
     ) -> CitizenImageAnalysis:
         """Analyze citizen image bytes or file and return validated structured evidence."""
         # 1. Load image and validate basic format/dimensions
-        if isinstance(image_data, (str, Path)):
+        if isinstance(image_data, str) and image_data.startswith("gs://"):
+            from services.storage.image_storage import get_image_storage_provider
+            raw_bytes = get_image_storage_provider().get_image_bytes(image_data)
+            filename = filename or image_data.split("/")[-1]
+        elif isinstance(image_data, (str, Path)):
             image_path = Path(image_data)
             with open(image_path, "rb") as f:
                 raw_bytes = f.read()
