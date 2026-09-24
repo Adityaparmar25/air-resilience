@@ -18,21 +18,37 @@ class Settings(BaseSettings):
     # Google Cloud & Storage
     GOOGLE_CLOUD_PROJECT: Optional[str] = Field(
         default=None,
-        description="Google Cloud Project ID for BigQuery and Cloud Run deployment",
+        description="Google Cloud Project ID for BigQuery, Vertex AI, Firestore, and Cloud Run",
+    )
+    GOOGLE_CLOUD_LOCATION: str = Field(
+        default="global",
+        description="Google Cloud location for Vertex AI models and services",
     )
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = Field(
         default=None,
-        description="Path to local Google Cloud service account JSON key",
+        description="Optional local development path to Google service account JSON key (ADC used in production)",
+    )
+    STORAGE_BUCKET: Optional[str] = Field(
+        default=None,
+        description="Google Cloud Storage bucket name for persistent private citizen images",
+    )
+    FIREBASE_PROJECT_ID: Optional[str] = Field(
+        default=None,
+        description="Firebase Project ID for token verification and RBAC",
     )
 
-    # Google AI
+    # Google AI / Vertex AI
     GEMINI_API_KEY: Optional[str] = Field(
         default=None,
-        description="Gemini API Key for multimodal observation interpretation",
+        description="Gemini API Key for direct developer mode (not required in production Vertex AI mode)",
     )
     GEMINI_MODEL: str = Field(
         default="gemini-3.5-flash-lite",
         description="Gemini model name for multimodal vision analysis",
+    )
+    VERTEX_AI_ENABLED: bool = Field(
+        default=False,
+        description="Enable Google Cloud Vertex AI backend for multimodal inference via ADC",
     )
 
     # Operational & Analytical Database Settings
@@ -68,6 +84,11 @@ class Settings(BaseSettings):
     PORT: int = Field(default=8000, description="API listen port (Cloud Run standard)")
     LOG_LEVEL: str = Field(default="INFO", description="Logging verbosity")
 
+    @property
+    def ENV(self) -> str:
+        """Alias for ENVIRONMENT for standard cloud environment checks."""
+        return self.ENVIRONMENT
+
     @field_validator("ENVIRONMENT")
     @classmethod
     def validate_environment(cls, v: str) -> str:
@@ -77,16 +98,28 @@ class Settings(BaseSettings):
         return v.lower()
 
     def validate_production_readiness(self) -> None:
-        """Validate that essential production credentials are provided when running in production."""
+        """Validate production configuration without requiring local credentials JSON."""
         if self.ENVIRONMENT == "production":
             missing = []
             if not self.GOOGLE_CLOUD_PROJECT:
                 missing.append("GOOGLE_CLOUD_PROJECT")
-            if not self.GOOGLE_APPLICATION_CREDENTIALS:
-                missing.append("GOOGLE_APPLICATION_CREDENTIALS")
+            if not self.GOOGLE_CLOUD_LOCATION:
+                missing.append("GOOGLE_CLOUD_LOCATION")
+            if not self.GEMINI_MODEL:
+                missing.append("GEMINI_MODEL")
+            if not self.VERTEX_AI_ENABLED:
+                missing.append("VERTEX_AI_ENABLED")
+
             if missing:
                 raise RuntimeError(
                     f"Production startup error: missing required environment variables: {', '.join(missing)}"
+                )
+
+            # Wildcard CORS is strictly forbidden in production
+            if self.CORS_ORIGINS.strip() == "*":
+                raise RuntimeError(
+                    "Production startup error: CORS_ORIGINS='*' (wildcard) is forbidden in production. "
+                    "Must specify explicit domain origins (e.g. 'https://air-resilience.vercel.app')."
                 )
 
 
